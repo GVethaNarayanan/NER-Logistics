@@ -1,0 +1,764 @@
+﻿
+> ner-logistics-frontend@0.0.0 test
+> vitest src/tests/incidents.test.tsx --run --reporter=verbose
+
+
+[1m[46m RUN [49m[22m [36mv3.2.7 [39m[90mC:/Users/Dell/OneDrive/Desktop/Final project (AI)/ner-logistics-frontend[39m
+
+ [31m├ù[39m src/tests/incidents.test.tsx[2m > [22mIncidents Page (Phase 6)[2m > [22mrenders incidents list and form[33m 1113[2mms[22m[39m
+[31m   ΓåÆ Unable to find an element with the text: ACCIDENT. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body>[31m
+  [36m<div>[31m
+    [36m<div[31m
+      [33mclass[31m=[32m"container mx-auto p-4 md:p-8 flex flex-col gap-8"[31m
+    [36m>[31m
+      [36m<div>[31m
+        [36m<h1[31m
+          [33mclass[31m=[32m"text-3xl font-bold flex items-center gap-3"[31m
+        [36m>[31m
+          [36m<svg[31m
+            [33maria-hidden[31m=[32m"true"[31m
+            [33mclass[31m=[32m"lucide lucide-file-text w-8 h-8 text-primary"[31m
+            [33mfill[31m=[32m"none"[31m
+            [33mheight[31m=[32m"24"[31m
+            [33mstroke[31m=[32m"currentColor"[31m
+            [33mstroke-linecap[31m=[32m"round"[31m
+            [33mstroke-linejoin[31m=[32m"round"[31m
+            [33mstroke-width[31m=[32m"2"[31m
+            [33mviewBox[31m=[32m"0 0 24 24"[31m
+            [33mwidth[31m=[32m"24"[31m
+            [33mxmlns[31m=[32m"http://www.w3.org/2000/svg"[31m
+          [36m>[31m
+            [36m<path[31m
+              [33md[31m=[32m"M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"[31m
+            [36m/>[31m
+            [36m<path[31m
+              [33md[31m=[32m"M14 2v5a1 1 0 0 0 1 1h5"[31m
+            [36m/>[31m
+            [36m<path[31m
+              [33md[31m=[32m"M10 9H8"[31m
+            [36m/>[31m
+            [36m<path[31m
+              [33md[31m=[32m"M16 13H8"[31m
+            [36m/>[31m
+            [36m<path[31m
+              [33md[31m=[32m"M16 17H8"[31m
+            [36m/>[31m
+          [36m</svg>[31m
+          [0mField Incidents[0m
+        [36m</h1>[31m
+        [36m<p[31m
+          [33mclass[31m=[32m"text-muted-foreground mt-2"[31m
+        [36m>[31m
+          [0mReport and manage infrastructure incidents.[0m
+        [36m</p>[31m
+      [36m</div>[31m
+      [36m<div[31m
+        [33mclass[31m=[32m"grid grid-cols-1 lg:grid-cols-2 gap-8"[31m
+      [36m>[31m
+        [36m<div[31m
+          [33mclass[31m=[32m"bg-card border rounded-lg p-6 shadow-sm flex flex-col gap-4"[31m
+        [36m>[31m
+          [36m<h2[31m
+            [33mclass[31m=[32m"font-semibold text-lg border-b pb-2"[31m
+          [36m>[31m
+            [0mReport New Incident[0m
+          [36m</h2>[31m
+          [36m<form[31m
+            [33mclass[31m=[32m"flex flex-col gap-4"[31m
+          [36m>[31m
+            [36m<div[31m
+              [33mclass[31m=[32m"grid grid-cols-2 gap-4"[31m
+            [36m>[31m
+              [36m<div[31m
+                [33mclass[31m=[32m"flex flex-col gap-2"[31m
+              [36m>[31m
+                [36m<label[31m
+                  [33mclass[31m=[32m"text-sm font-medium"[31m
+                [36m>[31m
+                  [0mType[0m
+                [36m</label>[31m
+                [36m<select[31m
+                  [33mclass[31m=[32m"bg-background border rounded p-2 text-sm"[31m
+                  [33mrequired[31m=[32m""[31m
+                [36m>[31m
+                  [36m<option[31m
+                    [33mvalue[31m=[32m"accident"[31m
+                  [36m>[31m
+                    [0mAccident[0m
+                  [36m</option>[31m
+                  [36m<option[31m
+                    [33mvalue[31m=[32m"landslide"[31m
+                  [36m>[31m
+                    [0mLandslide[0m
+                  [36m</option>[31m
+                  [36m<option[31m
+                    [33mvalue[31m=[32m"flood"[31m
+                  [36m>[31m
+                    [0mFlood[0m
+                  [36m</option>[31m
+                  [36m<option[31m
+                    [33mvalue[31m=[32m"bridge_damage"[31m
+                  [36m>[31m
+                    [0mBridge Damage[0m
+                  [36m</option>[31m
+                  [36m<option[31m
+                    [33mvalue[31m=[32m"roadblock"[31m
+                  [36m>[31m
+                    [0mRoadblock[0m
+                  [36m</option>[31m
+                [36m</select>[31m
+              [36m</div>[31m
+              [36m<div[31m
+                [33mclass[31m=[32m"flex flex-col gap-2"[31m
+              [36m>[31m
+                [36m<label[31m
+                  [33mclass[31m=[32m"text-sm font-medium"[31m
+                [36m>[31m
+                  [0mSeverity[0m
+                [36m</label>[31m
+                [36m<select[31m
+                  [33mclass[31m=[32m"bg-background border rounded p-2 text-sm"[31m
+                  [33mrequired[31m=[32m""[31m
+                [36m>[31m
+                  [36m<option[31m
+                    [33mvalue[31m=[32m"low"[31m
+                  [36m>[31m
+                    [0mLow[0m
+                  [36m</option>[31m
+                  [36m<option[31m
+                    [33mvalue[31m=[32m"medium"[31m
+                  [36m>[31m
+                    [0mMedium[0m
+                  [36m</option>[31m
+                  [36m<option[31m
+                    [33mvalue[31m=[32m"high"[31m
+                  [36m>[31m
+                    [0mHigh[0m
+                  [36m</option>[31m
+                [36m</select>[31m
+              [36m</div>[31m
+            [36m</div>[31m
+            [36m<div[31m
+              [33mclass[31m=[32m"flex flex-col gap-2"[31m
+            [36m>[31m
+              [36m<label[31m
+                [33mclass[31m=[32m"text-sm font-medium"[31m
+              [36m>[31m
+                [0mLocation (Geo-tag)[0m
+              [36m</label>[31m
+              [36m<div[31m
+                [33mclass[31m=[32m"flex items-center gap-2"[31m
+              [36m>[31m
+                [36m<button[31m
+                  [33mclass[31m=[32m"flex-1 py-2 rounded text-sm font-medium border flex items-center justify-center gap-2 transition-colors bg-muted hover:bg-muted/80 border-input"[31m
+                  [33mtype[31m=[32m"button"[31m
+                [36m>[31m
+                  [36m<svg[31m
+                    [33maria-hidden[31m=[32m"true"[31m
+                    [33mclass[31m=[32m"lucide lucide-map-pin w-4 h-4"[31m
+                    [33mfill[31m=[32m"none"[31m
+                    [33mheight[31m=[32m"24"[31m
+                    [33mstroke[31m=[32m"currentColor"[31m
+                    [33mstroke-linecap[31m=[32m"round"[31m
+                    [33mstroke-linejoin[31m=[32m"round"[31m
+                    [33mstroke-width[31m=[32m"2"[31m
+                    [33mviewBox[31m=[32m"0 0 24 24"[31m
+                    [33mwidth[31m=[32m"24"[31m
+                    [33mxmlns[31m=[32m"http://www.w3.org/2000/svg"[31m
+                  [36m>[31m
+                    [36m<path[31m
+                      [33md[31m=[32m"M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"[31m
+                    [36m/>[31m
+                    [36m<circle[31m
+                      [33mcx[31m=[32m"12"[31m
+                      [33mcy[31m=[32m"10"[31m
+                      [33mr[31m=[32m"3"[31m
+                    [36m/>[31m
+                  [36m</svg>[31m
+                  [0mPick on Map[0m
+                [36m</button>[31m
+                [36m<div[31m
+                  [33mclass[31m=[32m"flex-1 bg-background border rounded p-2 text-sm text-center font-mono text-muted-foreground"[31m
+                [36m>[31m
+                  [0mNo location selected[0m
+                [36m</div>[31m
+              [36m</div>[31m
+            [36m</div>[31m
+            [36m<div[31m
+              [33mclass[31m=[32m"grid grid-cols-2 gap-4"[31m
+            [36m>[31m
+              [36m<div[31m
+                [33mclass[31m=[32m"flex flex-col gap-2"[31m
+              [36m>[31m
+                [36m<label[31m
+                  [33mclass[31m=[32m"text-sm font-medium"[31m
+                [36m>[31m
+                  [0mAssociated Road (Optional)[0m
+                [36m</label>[31m
+                [36m<select[31m
+                  [33mclass[31m=[32m"bg-background border rounded p-2 text-sm"[31m
+                [36m>[31m
+                  [36m<option[31m
+                    [33mvalue[31m=[32m""[31m
+                  [36m>[31m
+                    [0m-- None --[0m
+                  [36m</option>[31m
+                  [36m<option[31m
+                    [33mvalue[31m=[32m"1"[31m
+                  [36m>[31m
+                    [0mRoad 1[0m
+                    [0m (ID: [0m
+                    [0m1[0m
+                    [0m)[0m
+                  [36m</option>[31m
+                [36m</select>[31m
+              [36m</div>[31m
+              [36m<div[31m
+                [33mclass[31m=[32m"flex flex-col gap-2"[31m
+              [36m>[31m
+                [36m<label[31m
+                  [33mclass[31m=[32m"text-sm font-medium"[31m
+                [36m>[31m
+                  [0mAssociated Bridge (Optional)[0m
+                [36m</label>[31m
+                [36m<select[31m
+                  [33mclass[31m=[32m"bg-background border rounded p-2 text-sm"[31m
+                [36m>[31m
+                  [36m<option[31m
+                    [33mvalue[31m=[32m""[31m
+                  [36m>[31m
+                    [0m-- None --[0m
+                  [36m</option>[31m
+                [36m</select>[31m
+              [36m</div>[31m
+            [36m</div>[31m
+            [36m<div[31m
+              [33mclass[31m=[32m"flex flex-col gap-2"[31m
+            [36m>[31m
+              [36m<label[31m
+                [33mclass[31m=[32m"text-sm font-medium"[31m
+              [36m>[31m
+                [0mDescription[0m
+              [36m</label>[31m
+              [36m<textarea[31m
+                [33mclass[31m=[32m"bg-background border rounded p-2 text-sm min-h-[80px]"[31m
+                [33mplaceholder[31m=[32m"Provide incident details..."[31m
+              [36m/>[31m
+            [36m</div>[31m
+            [36m<div[31m
+              [33mclass[31m=[32m"flex flex-col gap-2"[31m
+            [36m>[31m
+              [36m<label[31m
+                [33mclass[31m=[32m"text-sm font-medium"[31m
+                [33mfor[31m=[32m"photo-upload"[31m
+              [36m>[31m
+                [0mPhoto Evidence (Optional)[0m
+              [36m</label>[31m
+              [36m<input[31m
+                [33maccept[31m=[32m"image/*"[31m
+                [33mclass[31m=[32m"text-sm text-muted-foreground file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"[31m
+                [33mid[31m=[32m"photo-upload"[31m
+                [33mtype[31m=[32m"file"[31m
+              [36m/>[31m
+            [36m</div>[31m
+            [36m<button[31m
+              [33mclass[31m=[32m"mt-2 bg-primary text-primary-foreground py-2 rounded font-medium flex items-center justify-center gap-2 hover:bg-primary/90 disabled:opacity-50"[31m
+              [33mdisabled[31m=[32m""[31m
+              [33mtype[31m=[32m"submit"[31m
+            [36m>[31m
+              [36m<svg[31m
+                [33maria-hidden[31m=[32m"true"[31m
+                [33mclass[31m=[32m"lucide lucide-upload w-4 h-4"[31m
+                [33mfill[31m=[32m"none"[31m
+                [33mheight[31m=[32m"24"[31m
+                [33mstroke[31m=[32m"currentColor"[31m
+                [33mstroke-linecap[31m=[32m"round"[31m
+                [33mstroke-linejoin[31m=[32m"round"[31m
+                [33mstroke-width[31m=[32m"2"[31m
+                [33mviewBox[31m=[32m"0 0 24 24"[31m
+                [33mwidth[31m=[32m"24"[31m
+                [33mxmlns[31m=[32m"http://www.w3.org/2000/svg"[31m
+              [36m>[31m
+                [36m<path[31m
+                  [33md[31m=[32m"M12 3v12"[31m
+                [36m/>[31m
+                [36m<path[31m
+                  [33md[31m=[32m"m17 8-5-5-5 5"[31m
+                [36m/>[31m
+                [36m<path[31m
+                  [33md[31m=[32m"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"[31m
+                [36m/>[31m
+              [36m</svg>[31m
+              [0mSubmit Incident[0m
+            [36m</button>[31m
+          [36m</form>[31m
+        [36m</div>[31m
+        [36m<div[31m
+          [33mclass[31m=[32m"bg-card rounded-lg shadow-sm border overflow-hidden min-h-[500px] h-full flex flex-col relative"[31m
+        [36m>[31m
+          [36m<div[31m
+            [33mdata-testid[31m=[32m"mock-map"[31m
+          [36m>[31m
+            [0mMap[0m
+          [36m</div>[31m
+        [36m</div>[31m
+      [36m</div>[31m
+      [36m<div[31m
+        [33mclass[31m=[32m"bg-card border rounded-lg p-6 shadow-sm flex flex-col gap-4"[31m
+      [36m>[31m
+        [36m<div[31m
+          [33mclass[31m=[32m"flex items-center justify-between border-b pb-2"[31m
+        [36m>[31m
+          [36m<h2[31m
+            [33mclass[31m=[32m"font-semibold text-lg"[31m
+          [36m>[31m
+            [0mReported Incidents[0m
+          [36m</h2>[31m
+          [36m<button[31m
+            [33mclass[31m=[32m"text-sm font-medium text-blue-500 hover:underline"[31m
+          [36m>[31m
+            [0mRefresh[0m
+          [36m</button>[31m
+        [36m</div>[31m
+        [36m<div[31m
+          [33mclass[31m=[32m"grid grid-cols-1 md:grid-cols-2 gap-4"[31m
+        [36m>[31m
+          [36m<div[31m
+            [33mclass[31m=[32m"border rounded-lg p-4 flex flex-col gap-3"[31m
+          [36m>[31m
+            [36m<div[31m
+              [33mclass[31m=[32m"flex justify-between items-start"[31m
+            [36m>[31m
+              [36m<div>[31m
+                [36m<h3[31m
+                  [33mclass[31m=[32m"font-bold uppercase text-sm"[31m
+                [36m>[31m
+                  [0maccident[0m
+                [36m</h3>[31m
+                [36m<span[31m
+                  [33mclass[31m=[32m"text-xs text-muted-foreground"[31m
+                [36m>[31m
+                  [0mID: [0m
+                  [0m1[0m
+                  [0m ΓÇó [0m
+                  [0m9/12/2026, 11:41:35 AM[0m
+                [36m</span>[31m
+              [36m</div>[31m
+              [36m<div[31m
+                [33mclass[31m=[32m"flex gap-2"[31m
+              [36m>[31m
+                [36m<span[31m
+                  [33mclass[31m=[32m"text-xs px-2 py-1 rounded font-bold uppercase bg-amber-500 text-white"[31m
+                [36m>[31m
+                  [0mmedium[0m
+                [36m</span>[31m
+                [36m<span[31m
+                  [33mclass[31m=[32m"text-xs px-2 py-1 rounded font-bold uppercase border border-amber-500 text-amber-500"[31m
+                [36m>[31m
+                  [0mreported[0m
+                [36m</span>[31m
+              [36m</div>[31m
+            [36m</div>[31m
+            [36m<div[31m
+              [33mclass[31m=[32m"flex justify-between items-center mt-2 border-t pt-2"[31m
+            [36m>[31m
+              [36m<span[31m
+                [33mclass[31m=[32m"text-xs text-muted-foreground font-mono"[31m
+              [36m>[31m
+                [0m26.1000[0m
+                [0m, [0m
+                [0m91.7000[0m
+              [36m</span>[31m
+            [36m</div>[31m
+          [36m</div>[31m
+        [36m</div>[31m
+      [36m</div>[31m
+    [36m</div>[31m
+  [36m</div>[31m
+[36m</body>[31m
+
+Ignored nodes: comments, script, style
+[36m<body>[31m
+  [36m<div>[31m
+    [36m<div[31m
+      [33mclass[31m=[32m"container mx-auto p-4 md:p-8 flex flex-col gap-8"[31m
+    [36m>[31m
+      [36m<div>[31m
+        [36m<h1[31m
+          [33mclass[31m=[32m"text-3xl font-bold flex items-center gap-3"[31m
+        [36m>[31m
+          [36m<svg[31m
+            [33maria-hidden[31m=[32m"true"[31m
+            [33mclass[31m=[32m"lucide lucide-file-text w-8 h-8 text-primary"[31m
+            [33mfill[31m=[32m"none"[31m
+            [33mheight[31m=[32m"24"[31m
+            [33mstroke[31m=[32m"currentColor"[31m
+            [33mstroke-linecap[31m=[32m"round"[31m
+            [33mstroke-linejoin[31m=[32m"round"[31m
+            [33mstroke-width[31m=[32m"2"[31m
+            [33mviewBox[31m=[32m"0 0 24 24"[31m
+            [33mwidth[31m=[32m"24"[31m
+            [33mxmlns[31m=[32m"http://www.w3.org/2000/svg"[31m
+          [36m>[31m
+            [36m<path[31m
+              [33md[31m=[32m"M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"[31m
+            [36m/>[31m
+            [36m<path[31m
+              [33md[31m=[32m"M14 2v5a1 1 0 0 0 1 1h5"[31m
+            [36m/>[31m
+            [36m<path[31m
+              [33md[31m=[32m"M10 9H8"[31m
+            [36m/>[31m
+            [36m<path[31m
+              [33md[31m=[32m"M16 13H8"[31m
+            [36m/>[31m
+            [36m<path[31m
+              [33md[31m=[32m"M16 17H8"[31m
+            [36m/>[31m
+          [36m</svg>[31m
+          [0mField Incidents[0m
+        [36m</h1>[31m
+        [36m<p[31m
+          [33mclass[31m=[32m"text-muted-foreground mt-2"[31m
+        [36m>[31m
+          [0mReport and manage infrastructure incidents.[0m
+        [36m</p>[31m
+      [36m</div>[31m
+      [36m<div[31m
+        [33mclass[31m=[32m"grid grid-cols-1 lg:grid-cols-2 gap-8"[31m
+      [36m>[31m
+        [36m<div[31m
+          [33mclass[31m=[32m"bg-card border rounded-lg p-6 shadow-sm flex flex-col gap-4"[31m
+        [36m>[31m
+          [36m<h2[31m
+            [33mclass[31m=[32m"font-semibold text-lg border-b pb-2"[31m
+          [36m>[31m
+            [0mReport New Incident[0m
+          [36m</h2>[31m
+          [36m<form[31m
+            [33mclass[31m=[32m"flex flex-col gap-4"[31m
+          [36m>[31m
+            [36m<div[31m
+              [33mclass[31m=[32m"grid grid-cols-2 gap-4"[31m
+            [36m>[31m
+              [36m<div[31m
+                [33mclass[31m=[32m"flex flex-col gap-2"[31m
+              [36m>[31m
+                [36m<label[31m
+                  [33mclass[31m=[32m"text-sm font-medium"[31m
+                [36m>[31m
+                  [0mType[0m
+                [36m</label>[31m
+                [36m<select[31m
+                  [33mclass[31m=[32m"bg-background border rounded p-2 text-sm"[31m
+                  [33mrequired[31m=[32m""[31m
+                [36m>[31m
+                  [36m<option[31m
+                    [33mvalue[31m=[32m"accident"[31m
+                  [36m>[31m
+                    [0mAccident[0m
+                  [36m</option>[31m
+                  [36m<option[31m
+                    [33mvalue[31m=[32m"landslide"[31m
+                  [36m>[31m
+                    [0mLandslide[0m
+                  [36m</option>[31m
+                  [36m<option[31m
+                    [33mvalue[31m=[32m"flood"[31m
+                  [36m>[31m
+                    [0mFlood[0m
+                  [36m</option>[31m
+                  [36m<option[31m
+                    [33mvalue[31m=[32m"bridge_damage"[31m
+                  [36m>[31m
+                    [0mBridge Damage[0m
+                  [36m</option>[31m
+                  [36m<option[31m
+                    [33mvalue[31m=[32m"roadblock"[31m
+                  [36m>[31m
+                    [0mRoadblock[0m
+                  [36m</option>[31m
+                [36m</select>[31m
+              [36m</div>[31m
+              [36m<div[31m
+                [33mclass[31m=[32m"flex flex-col gap-2"[31m
+              [36m>[31m
+                [36m<label[31m
+                  [33mclass[31m=[32m"text-sm font-medium"[31m
+                [36m>[31m
+                  [0mSeverity[0m
+                [36m</label>[31m
+                [36m<select[31m
+                  [33mclass[31m=[32m"bg-background border rounded p-2 text-sm"[31m
+                  [33mrequired[31m=[32m""[31m
+                [36m>[31m
+                  [36m<option[31m
+                    [33mvalue[31m=[32m"low"[31m
+                  [36m>[31m
+                    [0mLow[0m
+                  [36m</option>[31m
+                  [36m<option[31m
+                    [33mvalue[31m=[32m"medium"[31m
+                  [36m>[31m
+                    [0mMedium[0m
+                  [36m</option>[31m
+                  [36m<option[31m
+                    [33mvalue[31m=[32m"high"[31m
+                  [36m>[31m
+                    [0mHigh[0m
+                  [36m</option>[31m
+                [36m</select>[31m
+              [36m</div>[31m
+            [36m</div>[31m
+            [36m<div[31m
+              [33mclass[31m=[32m"flex flex-col gap-2"[31m
+            [36m>[31m
+              [36m<label[31m
+                [33mclass[31m=[32m"text-sm font-medium"[31m
+              [36m>[31m
+                [0mLocation (Geo-tag)[0m
+              [36m</label>[31m
+              [36m<div[31m
+                [33mclass[31m=[32m"flex items-center gap-2"[31m
+              [36m>[31m
+                [36m<button[31m
+                  [33mclass[31m=[32m"flex-1 py-2 rounded text-sm font-medium border flex items-center justify-center gap-2 transition-colors bg-muted hover:bg-muted/80 border-input"[31m
+                  [33mtype[31m=[32m"button"[31m
+                [36m>[31m
+                  [36m<svg[31m
+                    [33maria-hidden[31m=[32m"true"[31m
+                    [33mclass[31m=[32m"lucide lucide-map-pin w-4 h-4"[31m
+                    [33mfill[31m=[32m"none"[31m
+                    [33mheight[31m=[32m"24"[31m
+                    [33mstroke[31m=[32m"currentColor"[31m
+                    [33mstroke-linecap[31m=[32m"round"[31m
+                    [33mstroke-linejoin[31m=[32m"round"[31m
+                    [33mstroke-width[31m=[32m"2"[31m
+                    [33mviewBox[31m=[32m"0 0 24 24"[31m
+                    [33mwidth[31m=[32m"24"[31m
+                    [33mxmlns[31m=[32m"http://www.w3.org/2000/svg"[31m
+                  [36m>[31m
+                    [36m<path[31m
+                      [33md[31m=[32m"M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"[31m
+                    [36m/>[31m
+                    [36m<circle[31m
+                      [33mcx[31m=[32m"12"[31m
+                      [33mcy[31m=[32m"10"[31m
+                      [33mr[31m=[32m"3"[31m
+                    [36m/>[31m
+                  [36m</svg>[31m
+                  [0mPick on Map[0m
+                [36m</button>[31m
+                [36m<div[31m
+                  [33mclass[31m=[32m"flex-1 bg-background border rounded p-2 text-sm text-center font-mono text-muted-foreground"[31m
+                [36m>[31m
+                  [0mNo location selected[0m
+                [36m</div>[31m
+              [36m</div>[31m
+            [36m</div>[31m
+            [36m<div[31m
+              [33mclass[31m=[32m"grid grid-cols-2 gap-4"[31m
+            [36m>[31m
+              [36m<div[31m
+                [33mclass[31m=[32m"flex flex-col gap-2"[31m
+              [36m>[31m
+                [36m<label[31m
+                  [33mclass[31m=[32m"text-sm font-medium"[31m
+                [36m>[31m
+                  [0mAssociated Road (Optional)[0m
+                [36m</label>[31m
+                [36m<select[31m
+                  [33mclass[31m=[32m"bg-background border rounded p-2 text-sm"[31m
+                [36m>[31m
+                  [36m<option[31m
+                    [33mvalue[31m=[32m""[31m
+                  [36m>[31m
+                    [0m-- None --[0m
+                  [36m</option>[31m
+                  [36m<option[31m
+                    [33mvalue[31m=[32m"1"[31m
+                  [36m>[31m
+                    [0mRoad 1[0m
+                    [0m (ID: [0m
+                    [0m1[0m
+                    [0m)[0m
+                  [36m</option>[31m
+                [36m</select>[31m
+              [36m</div>[31m
+              [36m<div[31m
+                [33mclass[31m=[32m"flex flex-col gap-2"[31m
+              [36m>[31m
+                [36m<label[31m
+                  [33mclass[31m=[32m"text-sm font-medium"[31m
+                [36m>[31m
+                  [0mAssociated Bridge (Optional)[0m
+                [36m</label>[31m
+                [36m<select[31m
+                  [33mclass[31m=[32m"bg-background border rounded p-2 text-sm"[31m
+                [36m>[31m
+                  [36m<option[31m
+                    [33mvalue[31m=[32m""[31m
+                  [36m>[31m
+                    [0m-- None --[0m
+                  [36m</option>[31m
+                [36m</select>[31m
+              [36m</div>[31m
+            [36m</div>[31m
+            [36m<div[31m
+              [33mclass[31m=[32m"flex flex-col gap-2"[31m
+            [36m>[31m
+              [36m<label[31m
+                [33mclass[31m=[32m"text-sm font-medium"[31m
+              [36m>[31m
+                [0mDescription[0m
+              [36m</label>[31m
+              [36m<textarea[31m
+                [33mclass[31m=[32m"bg-background border rounded p-2 text-sm min-h-[80px]"[31m
+                [33mplaceholder[31m=[32m"Provide incident details..."[31m
+              [36m/>[31m
+            [36m</div>[31m
+            [36m<div[31m
+              [33mclass[31m=[32m"flex flex-col gap-2"[31m
+            [36m>[31m
+              [36m<label[31m
+                [33mclass[31m=[32m"text-sm font-medium"[31m
+                [33mfor[31m=[32m"photo-upload"[31m
+              [36m>[31m
+                [0mPhoto Evidence (Optional)[0m
+              [36m</label>[31m
+              [36m<input[31m
+                [33maccept[31m=[32m"image/*"[31m
+                [33mclass[31m=[32m"text-sm text-muted-foreground file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"[31m
+                [33mid[31m=[32m"photo-upload"[31m
+                [33mtype[31m=[32m"file"[31m
+              [36m/>[31m
+            [36m</div>[31m
+            [36m<button[31m
+              [33mclass[31m=[32m"mt-2 bg-primary text-primary-foreground py-2 rounded font-medium flex items-center justify-center gap-2 hover:bg-primary/90 disabled:opacity-50"[31m
+              [33mdisabled[31m=[32m""[31m
+              [33mtype[31m=[32m"submit"[31m
+            [36m>[31m
+              [36m<svg[31m
+                [33maria-hidden[31m=[32m"true"[31m
+                [33mclass[31m=[32m"lucide lucide-upload w-4 h-4"[31m
+                [33mfill[31m=[32m"none"[31m
+                [33mheight[31m=[32m"24"[31m
+                [33mstroke[31m=[32m"currentColor"[31m
+                [33mstroke-linecap[31m=[32m"round"[31m
+                [33mstroke-linejoin[31m=[32m"round"[31m
+                [33mstroke-width[31m=[32m"2"[31m
+                [33mviewBox[31m=[32m"0 0 24 24"[31m
+                [33mwidth[31m=[32m"24"[31m
+                [33mxmlns[31m=[32m"http://www.w3.org/2000/svg"[31m
+              [36m>[31m
+                [36m<path[31m
+                  [33md[31m=[32m"M12 3v12"[31m
+                [36m/>[31m
+                [36m<path[31m
+                  [33md[31m=[32m"m17 8-5-5-5 5"[31m
+                [36m/>[31m
+                [36m<path[31m
+                  [33md[31m=[32m"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"[31m
+                [36m/>[31m
+              [36m</svg>[31m
+              [0mSubmit Incident[0m
+            [36m</button>[31m
+          [36m</form>[31m
+        [36m</div>[31m
+        [36m<div[31m
+          [33mclass[31m=[32m"bg-card rounded-lg shadow-sm border overflow-hidden min-h-[500px] h-full flex flex-col relative"[31m
+        [36m>[31m
+          [36m<div[31m
+            [33mdata-testid[31m=[32m"mock-map"[31m
+          [36m>[31m
+            [0mMap[0m
+          [36m</div>[31m
+        [36m</div>[31m
+      [36m</div>[31m
+      [36m<div[31m
+        [33mclass[31m=[32m"bg-card border rounded-lg p-6 shadow-sm flex flex-col gap-4"[31m
+      [36m>[31m
+        [36m<div[31m
+          [33mclass[31m=[32m"flex items-center justify-between border-b pb-2"[31m
+        [36m>[31m
+          [36m<h2[31m
+            [33mclass[31m=[32m"font-semibold text-lg"[31m
+          [36m>[31m
+            [0mReported Incidents[0m
+          [36m</h2>[31m
+          [36m<button[31m
+            [33mclass[31m=[32m"text-sm font-medium text-blue-500 hover:underline"[31m
+          [36m>[31m
+            [0mRefresh[0m
+          [36m</button>[31m
+        [36m</div>[31m
+        [36m<div[31m
+          [33mclass[31m=[32m"grid grid-cols-1 md:grid-cols-2 gap-4"[31m
+        [36m>[31m
+          [36m<div[31m
+            [33mclass[31m=[32m"border rounded-lg p-4 flex flex-col gap-3"[31m
+          [36m>[31m
+            [36m<div[31m
+              [33mclass[31m=[32m"flex justify-between items-start"[31m
+            [36m>[31m
+              [36m<div>[31m
+                [36m<h3[31m
+                  [33mclass[31m=[32m"font-bold uppercase text-sm"[31m
+                [36m>[31m
+                  [0maccident[0m
+                [36m</h3>[31m
+                [36m<span[31m
+                  [33mclass[31m=[32m"text-xs text-muted-foreground"[31m
+                [36m>[31m
+                  [0mID: [0m
+                  [0m1[0m
+                  [0m ΓÇó [0m
+                  [0m9/12/2026, 11:41:35 AM[0m
+                [36m</span>[31m
+              [36m</div>[31m
+              [36m<div[31m
+                [33mclass[31m=[32m"flex gap-2"[31m
+              [36m>[31m
+                [36m<span[31m
+                  [33mclass[31m=[32m"text-xs px-2 py-1 rounded font-bold uppercase bg-amber-500 text-white"[31m
+                [36m>[31m
+                  [0mmedium[0m
+                [36m</span>[31m
+                [36m<span[31m
+                  [33mclass[31m=[32m"text-xs px-2 py-1 rounded font-bold uppercase border border-amber-500 text-amber-500"[31m
+                [36m>[31m
+                  [0mreported[0m
+                [36m</span>[31m
+              [36m</div>[31m
+            [36m</div>[31m
+            [36m<div[31m
+              [33mclass[31m=[32m"flex justify-between items-center mt-2 border-t pt-2"[31m
+            [36m>[31m
+              [36m<span[31m
+                [33mclass[31m=[32m"text-xs text-muted-foreground font-mono"[31m
+              [36m>[31m
+                [0m26.1000[0m
+                [0m, [0m
+                [0m91.7000[0m
+              [36m</span>[31m
+            [36m</div>[31m
+          [36m</div>[31m
+        [36m</div>[31m
+      [36m</div>[31m
+    [36m</div>[31m
+  [36m</div>[31m
+[36m</body>[31m[39m
+ [32mΓ£ô[39m src/tests/incidents.test.tsx[2m > [22mIncidents Page (Phase 6)[2m > [22mallows filling the form and handles geo-tagging via map click[32m 59[2mms[22m[39m
+ [32mΓ£ô[39m src/tests/incidents.test.tsx[2m > [22mIncidents Page (Phase 6)[2m > [22mperforms online submission correctly with two-step photo upload[32m 64[2mms[22m[39m
+ [32mΓ£ô[39m src/tests/incidents.test.tsx[2m > [22mIncidents Page (Phase 6)[2m > [22msaves to offline queue if network fetch fails[32m 60[2mms[22m[39m
+ [32mΓ£ô[39m src/tests/incidents.test.tsx[2m > [22mIncidents Page (Phase 6)[2m > [22mhandles partial photo upload failure without discarding incident[32m 51[2mms[22m[39m
+ [32mΓ£ô[39m src/tests/incidents.test.tsx[2m > [22mIncidents Page (Phase 6)[2m > [22mallows field officials to verify and admins to resolve[32m 32[2mms[22m[39m
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m5 passed[39m[22m[90m (6)[39m
+[2m   Start at [22m 11:41:32
+[2m   Duration [22m 4.17s[2m (transform 271ms, setup 0ms, collect 701ms, tests 1.38s, environment 859ms, prepare 194ms)[22m
+

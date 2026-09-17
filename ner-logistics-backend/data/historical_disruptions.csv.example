@@ -1,0 +1,4 @@
+rainfall_mm,road_condition,bridge_condition,recent_incidents,terrain_difficulty,disrupted,source
+180,poor,fair,3,0.8,1,"NDMA situation report, 14 Jun 2024 - NH-27 landslide near Nongstoin"
+5,good,good,0,0.2,0,"No incident on record for this segment on this date - control sample"
+120,fair,poor,2,0.7,1,"ASDMA bulletin - flood-related closure, Cachar district"

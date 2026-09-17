@@ -1,0 +1,24 @@
+fastapi
+uvicorn[standard]
+sqlalchemy
+pydantic
+pydantic-settings
+python-dotenv
+requests
+scikit-learn==1.8.0
+pandas
+numpy
+joblib
+osmnx
+# Auth (Phase 3)
+python-jose[cryptography]
+passlib[bcrypt]
+bcrypt
+python-multipart
+# Testing
+pytest
+httpx
+apscheduler
+alembic
+psycopg2-binary
+geoalchemy2
