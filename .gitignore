@@ -20,16 +20,21 @@ build/
 *.log
 
 uploads/
+media/
+cache/
 tmp/
 .cache/
 .osm_cache/
+
 *.osm.pbf
-
-.DS_Store
-Thumbs.db
-
-.vscode/
-.idea/
+*.db
+*.sqlite
+*.sqlite3
 
 docker-data/
 postgres-data/
+
+integration_output.txt
+out.json
+openapi_dump.json
+test-output.txt
