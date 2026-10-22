@@ -1,6 +1,6 @@
 // Schema types are in auth.ts and elsewhere
 
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || ''
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (typeof window !== 'undefined' && window.location.hostname.includes('vercel.app') ? 'https://ner-logistics-1.onrender.com' : '')
 
 // --- Types ---
 

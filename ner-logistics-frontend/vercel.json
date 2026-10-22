@@ -1,6 +1,10 @@
 {
   "rewrites": [
     {
+      "source": "/(routing|roads|bridges|weather|incidents|vehicles|risk|alerts|districts|auth|routes)(.*)",
+      "destination": "https://ner-logistics-1.onrender.com/$1$2"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
