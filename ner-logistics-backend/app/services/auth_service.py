@@ -87,17 +87,27 @@ def decode_token(token: str) -> Optional[dict]:
 # ── User CRUD helpers (used by auth router) ───────────────────────────────────
 
 def get_user_by_username(db: Session, username: str) -> Optional[User]:
-    return db.query(User).filter(User.username == username).first()
+    if not username:
+        return None
+    return db.query(User).filter(User.username.ilike(username.strip())).first()
 
 
 def get_user_by_email(db: Session, email: str) -> Optional[User]:
-    return db.query(User).filter(User.email == email).first()
+    if not email:
+        return None
+    return db.query(User).filter(User.email.ilike(email.strip())).first()
 
 
 def authenticate_user(db: Session, username: str, password: str) -> Optional[User]:
     """Validate credentials. Returns User on success, None on failure.
-    Deliberately does not reveal whether the username or password was wrong."""
-    user = get_user_by_username(db, username)
+    Deliberately does not reveal whether the username or password was wrong.
+    Supports either username or email in the username field."""
+    if not username:
+        return None
+    cleaned = username.strip()
+    user = get_user_by_username(db, cleaned)
+    if user is None:
+        user = get_user_by_email(db, cleaned)
     if user is None:
         # Spend time hashing anyway to prevent timing attacks
         hash_password("dummy-timing-safe")

@@ -53,8 +53,9 @@ def get_roads_bbox(
     if district_id == -1:
         where_clauses.append("district_id IS NULL")
     elif district_id is not None:
-        where_clauses.append("district_id = :district_id")
-        params["district_id"] = district_id
+        if zoom < 10:
+            where_clauses.append("district_id = :district_id")
+            params["district_id"] = district_id
         
     if status_filter:
         where_clauses.append("status ILIKE :status")
@@ -82,9 +83,6 @@ def get_roads_bbox(
     else:
         geom_sql = "ST_AsGeoJSON(geometry) as geojson"
 
-    count_sql = text(f"SELECT COUNT(*) FROM roads WHERE {where_sql}")
-    total_matched = db.execute(count_sql, params).scalar()
-
     query_sql = text(f"""
         SELECT 
             id, name, road_type, status, district_id, osm_id,
@@ -96,6 +94,7 @@ def get_roads_bbox(
     """)
 
     results = db.execute(query_sql, params).fetchall()
+    total_matched = len(results)
     
     features = []
     for row in results:

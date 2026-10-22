@@ -81,3 +81,71 @@ def compute_risk_score(
         "factors": factors,
         "prediction_source": "tier1_fallback"
     }
+
+def compute_bulk_risk_scores(features_list: list) -> list:
+    """Batch evaluation of risk scores for multiple roads."""
+    # Attempt ML inference first
+    ml_results = ml_service.predict_bulk(features_list)
+    
+    final_results = []
+    
+    for row, (ml_score, source) in zip(features_list, ml_results):
+        if source == "ml" and ml_score is not None:
+            score = ml_score
+            if score < 35:
+                level = "LOW"
+            elif score < 65:
+                level = "MEDIUM"
+            else:
+                level = "HIGH"
+            final_results.append({
+                "risk_score": score, 
+                "risk_level": level, 
+                "factors": ["AI-driven disruption prediction"],
+                "prediction_source": "ml"
+            })
+            continue
+
+        # Tier 1 Fallback
+        rainfall_mm = row.get("rainfall_mm", 0.0)
+        road_condition = row.get("road_condition", "fair")
+        bridge_condition = row.get("bridge_condition", "fair")
+        recent_incidents = row.get("recent_incidents", 0)
+        terrain_difficulty = row.get("terrain_difficulty", 0.3)
+
+        rainfall_component = min(rainfall_mm / 100.0, 1.0) * WEIGHTS["rainfall"]
+        road_component = CONDITION_SCORE.get(road_condition, 0.5) * WEIGHTS["road_condition"]
+        bridge_component = CONDITION_SCORE.get(bridge_condition, 0.5) * WEIGHTS["bridge_condition"]
+        incident_component = min(recent_incidents / 5.0, 1.0) * WEIGHTS["recent_incidents"]
+        terrain_component = min(max(terrain_difficulty, 0.0), 1.0) * WEIGHTS["terrain_difficulty"]
+
+        score = rainfall_component + road_component + bridge_component + incident_component + terrain_component
+        score = round(min(score, 100.0), 1)
+
+        if score < 35:
+            level = "LOW"
+        elif score < 65:
+            level = "MEDIUM"
+        else:
+            level = "HIGH"
+
+        contributions = {
+            "heavy rainfall": rainfall_component,
+            "poor road condition": road_component,
+            "poor bridge condition": bridge_component,
+            "recent incidents on this route": incident_component,
+            "difficult terrain": terrain_component,
+        }
+        factors = [k for k, v in sorted(contributions.items(), key=lambda x: -x[1]) if v > 5][:3]
+        if not factors:
+            factors = ["no significant risk factors detected"]
+
+        final_results.append({
+            "risk_score": score, 
+            "risk_level": level, 
+            "factors": factors,
+            "prediction_source": "tier1_fallback"
+        })
+        
+    return final_results
+

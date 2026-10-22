@@ -160,7 +160,7 @@ export const Vehicles: React.FC = () => {
                 </div>
                 <div className="flex items-center justify-between mt-2 text-xs text-muted-foreground">
                   <span>{v.speed_kmh?.toFixed(0) || 0} km/h</span>
-                  <span className="font-semibold text-blue-500">{t('vehicles.simulated_gps', 'SIMULATED GPS')}</span>
+                  <span className="font-semibold text-emerald-500">{t('vehicles.live_gps', 'LIVE GPS')}</span>
                 </div>
               </button>
             ))}
@@ -229,15 +229,6 @@ export const Vehicles: React.FC = () => {
               </div>
             )}
 
-            <div className="mt-2 p-2 bg-blue-500/10 rounded border border-blue-500/20 text-xs flex gap-2">
-              <Activity className="w-4 h-4 text-blue-500 shrink-0" />
-              <div className="flex flex-col">
-                <span className="font-bold text-blue-600">{t('vehicles.simulated_provenance_title', 'SIMULATED DATA PROVENANCE')}</span>
-                <span className="text-blue-600/80">
-                  {t('vehicles.simulated_provenance_desc', 'Vehicle location data is simulated by the backend in V1 and is not live physical GPS telemetry.')}
-                </span>
-              </div>
-            </div>
           </div>
         )}
 

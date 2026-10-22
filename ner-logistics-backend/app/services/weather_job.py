@@ -179,15 +179,18 @@ def start_scheduler():
             logger.info("Vehicle simulation job scheduled (10s interval).")
         else:
             logger.info("Vehicle simulation job is DISABLED by configuration.")
-        # Phase 11: Alert evaluation every 5 minutes (max_instances=1 for duplicate safety)
+        # Phase 11: Alert evaluation every 30 minutes (max_instances=1 for duplicate safety)
+        # Reduced frequency to prevent CPU contention with routing requests
+        import datetime
         scheduler.add_job(
             evaluate_network_alerts,
-            trigger=IntervalTrigger(minutes=5),
+            trigger=IntervalTrigger(minutes=30),
+            next_run_time=datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=30),
             id="alert_evaluation_job",
             replace_existing=True,
             max_instances=1,
         )
-        logger.info("Alert evaluation job scheduled (5min interval, max_instances=1).")
+        logger.info("Alert evaluation job scheduled (30min interval, delayed 30m start).")
         scheduler.start()
         logger.info("Background scheduler started.")
 

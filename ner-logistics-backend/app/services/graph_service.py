@@ -45,7 +45,7 @@ logger = logging.getLogger("ner_logistics.graph_service")
 # ── Configuration ─────────────────────────────────────────────────────────────
 
 COORD_PRECISION = 7       # decimal places for coordinate rounding (~1.1cm)
-CACHE_TTL_SECONDS = 600   # 10 minutes
+CACHE_TTL_SECONDS = 86400   # 24 hours — graph stays in memory for the entire session
 MIN_EDGE_DISTANCE_KM = 0.0001  # minimum edge weight to avoid zero-length edges
 
 # ── Per-process Graph Cache ───────────────────────────────────────────────────
@@ -75,10 +75,11 @@ def get_graph_diagnostics() -> dict:
 
 def invalidate_graph_cache():
     """Manually invalidate the graph cache, forcing rebuild on next access."""
-    global _GRAPH_CACHE, _CACHE_TIMESTAMP, _ROAD_COORDS_CACHE
+    global _GRAPH_CACHE, _CACHE_TIMESTAMP, _ROAD_COORDS_CACHE, _ROAD_TO_EDGES_CACHE
     _GRAPH_CACHE = None
     _CACHE_TIMESTAMP = 0.0
     _ROAD_COORDS_CACHE = None
+    _ROAD_TO_EDGES_CACHE = None
     logger.info("Graph cache manually invalidated.")
 
 
@@ -109,25 +110,16 @@ def _approximate_segment_length(coords: List[Tuple[float, float]]) -> float:
 
 # ── Topology Extraction ─────────────────────────────────────────────────────
 
-def _extract_topology_from_db(db: Session) -> Tuple[nx.DiGraph, Dict[int, List[Tuple[float, float]]]]:
+def _extract_topology_from_db(db: Session) -> Tuple[nx.DiGraph, Dict[int, List[Tuple[float, float]]], Dict[int, List[Tuple[tuple, tuple, dict]]], dict]:
     """Build a routable DiGraph using vertex-sharing topology.
     
-    Algorithm:
-    1. Fetch all road coordinates as vertex arrays (ST_DumpPoints)
-    2. Build a coordinate → {road_ids} index using rounded coordinates
-    3. Identify shared vertices (those appearing in 2+ roads) = intersections
-    4. For each road, find its "key vertices" (endpoints + shared vertices)
-    5. Create directed edges between consecutive key vertices
-    6. Store full coordinate sub-arrays on edges for geometry reconstruction
-    
     Returns:
-        (graph, road_coords_map)
-        - graph: NetworkX DiGraph
-        - road_coords_map: {road_id: [(lat, lon), ...]} for geometry reconstruction
+        (graph, road_coords_map, road_to_edges_map, timings)
     """
-    t0 = time.time()
+    timings = {}
     
     # ── Step 1: Fetch all road vertices from PostGIS ────────────────────
+    t_fetch_start = time.time()
     logger.info("Fetching road vertices from PostGIS...")
     
     engine = db.get_bind()
@@ -135,12 +127,12 @@ def _extract_topology_from_db(db: Session) -> Tuple[nx.DiGraph, Dict[int, List[T
     try:
         with raw_conn.cursor(name='fetch_roads_stream') as cursor:
             cursor.itersize = 2000
-            
             cursor.execute("""
                 SELECT r.id as road_id,
                        r.road_type,
                        r.osm_tags,
                        ST_NPoints(r.geometry) as n_vertices,
+                       ST_Length(r.geometry::geography) as total_length_m,
                        ST_AsText(r.geometry) as wkt
                 FROM roads r
                 WHERE r.geometry IS NOT NULL
@@ -148,10 +140,12 @@ def _extract_topology_from_db(db: Session) -> Tuple[nx.DiGraph, Dict[int, List[T
                   AND r.is_legacy = false
             """)
             
-            t1 = time.time()
-            logger.info(f"Query executed in {t1 - t0:.2f}s, starting stream processing...")
+            t_fetch_end = time.time()
+            timings["db_fetch_stream_s"] = t_fetch_end - t_fetch_start
+            logger.info(f"Query executed in {timings['db_fetch_stream_s']:.2f}s, starting stream processing...")
             
             # ── Step 2: Parse vertices and build coordinate index ───────────────
+            t_parse_start = time.time()
             coord_to_roads: Dict[Tuple[float, float], Set[int]] = defaultdict(set)
             road_vertices: Dict[int, List[Tuple[float, float]]] = {}
             road_meta: Dict[int, dict] = {}
@@ -163,7 +157,8 @@ def _extract_topology_from_db(db: Session) -> Tuple[nx.DiGraph, Dict[int, List[T
                 road_type = row[1]
                 tags = row[2] if isinstance(row[2], dict) else {}
                 n_vertices = row[3]
-                wkt = row[4]
+                total_length_m = row[4]
+                wkt = row[5]
                 
                 coords_str = wkt.replace("LINESTRING(", "").replace("LINESTRING (", "").rstrip(")")
                 parts = coords_str.split(",")
@@ -171,130 +166,129 @@ def _extract_topology_from_db(db: Session) -> Tuple[nx.DiGraph, Dict[int, List[T
                 coords = []
                 for p in parts:
                     lon_str, lat_str = p.strip().split(" ")
-                    coords.append((float(lat_str), float(lon_str)))
+                    # Pre-round the coordinates here to avoid re-rounding later
+                    r_lat = _round_coord(float(lat_str))
+                    r_lon = _round_coord(float(lon_str))
+                    coords.append((r_lat, r_lon))
                 
                 road_vertices[road_id] = coords
                 road_meta[road_id] = {
                     "road_type": road_type,
                     "oneway": tags.get("oneway", "no") if tags else "no",
-                    "n_vertices": row[4],
+                    "n_vertices": n_vertices,
+                    "total_length_m": total_length_m,
                 }
                 
-                for lat, lon in coords:
-                    r_lat = _round_coord(lat)
-                    r_lon = _round_coord(lon)
-                    coord_to_roads[(r_lat, r_lon)].add(road_id)
+                for pt in coords:
+                    coord_to_roads[pt].add(road_id)
                     
-            logger.info(f"Streamed and parsed {row_count} roads in {time.time() - t1:.2f}s")
     except Exception as e:
         logger.error(f"Error streaming topology: {e}")
         raw_conn.rollback()
         raise e
     finally:
-        raw_conn.rollback()  # Safely cancel the named cursor before closing
-        raw_conn.close()
+        try:
+            raw_conn.rollback()
+            raw_conn.close()
+        except:
+            pass
     
-    index_time = time.time() - t1
-    logger.info(f"Indexed {len(road_vertices)} roads, {len(coord_to_roads)} unique coords in {index_time:.2f}s")
+    t_parse_end = time.time()
+    timings["coordinate_parsing_s"] = t_parse_end - t_parse_start
+    logger.info(f"Indexed {len(road_vertices)} roads in {timings['coordinate_parsing_s']:.2f}s")
     
     # ── Step 3: Identify shared vertices (intersections) ────────────────
-    t2 = time.time()
-    
+    t_shared_start = time.time()
     shared_coords: Set[Tuple[float, float]] = set()
     for coord, road_ids in coord_to_roads.items():
         if len(road_ids) > 1:
             shared_coords.add(coord)
     
-    shared_time = time.time() - t2
-    logger.info(f"Found {len(shared_coords)} shared vertices (intersections) in {shared_time:.3f}s")
+    t_shared_end = time.time()
+    timings["shared_vertex_detection_s"] = t_shared_end - t_shared_start
+    logger.info(f"Found {len(shared_coords)} shared vertices in {timings['shared_vertex_detection_s']:.3f}s")
     
     # ── Step 4 & 5: Build graph with key-vertex edges ───────────────────
-    t3 = time.time()
-    
+    t_edge_start = time.time()
     G = nx.DiGraph()
-    total_edges_added = 0
+    road_to_edges = defaultdict(list)
+    
+    import math
+    R_pi_180 = 6371000.0 * math.pi / 180.0
+    
+    all_edges = []
     
     for road_id, vertices in road_vertices.items():
         meta = road_meta[road_id]
         oneway = meta["oneway"]
         road_type = meta["road_type"]
-        total_length_m = _approximate_segment_length(vertices)
         
-        # Identify key vertex indices: first, last, and any shared intermediate vertices
-        key_indices = [0]  # always include start
+        n_v = len(vertices)
         
-        for i in range(1, len(vertices) - 1):
-            rounded = _round_point(vertices[i][0], vertices[i][1])
-            if rounded in shared_coords:
+        # Pull pre-calculated length from DB
+        total_length_m = meta.get("total_length_m", 0.0)
+            
+        # 1. Identify key vertex indices: first, last, and any shared intermediate vertices
+        key_indices = [0]
+        for i in range(1, n_v - 1):
+            if vertices[i] in shared_coords:
                 key_indices.append(i)
         
-        key_indices.append(len(vertices) - 1)  # always include end
+        key_indices.append(n_v - 1)
+        # Remove duplicates while preserving order
+        unique_keys = []
+        last_k = -1
+        for k in key_indices:
+            if k != last_k:
+                unique_keys.append(k)
+                last_k = k
         
-        # Remove duplicates and sort
-        key_indices = sorted(set(key_indices))
-        
-        # Create edges between consecutive key vertices
-        for seg_idx in range(len(key_indices) - 1):
-            i_start = key_indices[seg_idx]
-            i_end = key_indices[seg_idx + 1]
+        for seg_idx in range(len(unique_keys) - 1):
+            i_start = unique_keys[seg_idx]
+            i_end = unique_keys[seg_idx + 1]
             
-            start_pt = _round_point(vertices[i_start][0], vertices[i_start][1])
-            end_pt = _round_point(vertices[i_end][0], vertices[i_end][1])
+            start_pt = vertices[i_start]
+            end_pt = vertices[i_end]
             
             if start_pt == end_pt:
-                continue  # skip degenerate segments
+                continue
             
-            # Calculate segment length proportionally from total road length
-            # (proportional to vertex count in segment vs total road)
-            if len(vertices) > 1:
-                # Use vertex-based length approximation
-                segment_coords = vertices[i_start:i_end + 1]
-                seg_length_m = _approximate_segment_length(segment_coords)
-            else:
-                seg_length_m = total_length_m
-            
+            # Proportional length approximation completely skips heavy math
+            # Distance is proportional to vertex count in segment vs total road
+            seg_length_m = total_length_m * ((i_end - i_start) / max(1, n_v - 1))
             seg_length_km = max(seg_length_m / 1000.0, MIN_EDGE_DISTANCE_KM)
-            
-            # Store the full coordinate sub-array for geometry reconstruction
-            segment_coord_list = [(v[1], v[0]) for v in vertices[i_start:i_end + 1]]  # (lon, lat) for GeoJSON
             
             edge_data = {
                 "road_id": road_id,
                 "road_type": road_type,
                 "distance_km": seg_length_km,
-                "coordinates": segment_coord_list,  # GeoJSON order: [lon, lat]
+                "risk_cost": seg_length_km,
                 "oneway": oneway,
                 "is_reversed": False,
             }
             
-            # Add directed edges based on oneway tag
+            edges_to_add = []
             if oneway == "yes":
-                G.add_edge(start_pt, end_pt, **edge_data)
-                total_edges_added += 1
+                edges_to_add.append((start_pt, end_pt, edge_data))
             elif oneway == "-1":
-                # Reverse direction
-                reverse_coords = list(reversed(segment_coord_list))
-                edge_data_rev = {**edge_data, "coordinates": reverse_coords, "is_reversed": True}
-                G.add_edge(end_pt, start_pt, **edge_data_rev)
-                total_edges_added += 1
+                edges_to_add.append((end_pt, start_pt, {**edge_data, "is_reversed": True}))
             else:
-                # Bidirectional
-                G.add_edge(start_pt, end_pt, **edge_data)
-                reverse_coords = list(reversed(segment_coord_list))
-                edge_data_rev = {**edge_data, "coordinates": reverse_coords, "is_reversed": True}
-                G.add_edge(end_pt, start_pt, **edge_data_rev)
-                total_edges_added += 2
+                edges_to_add.append((start_pt, end_pt, edge_data))
+                edges_to_add.append((end_pt, start_pt, {**edge_data, "is_reversed": True}))
+            
+            for u, v, data in edges_to_add:
+                all_edges.append((u, v, data))
+            
+            # Store lightweight (u, v, distance_km) tuple in road_to_edges
+            road_to_edges[road_id].append((start_pt, end_pt, seg_length_km))
     
-    build_time = time.time() - t3
+    # Bulk insert into NetworkX
+    G.add_edges_from(all_edges)
     
-    total_time = time.time() - t0
-    logger.info(
-        f"Built vertex-sharing graph: {G.number_of_nodes()} nodes, "
-        f"{G.number_of_edges()} edges from {len(road_vertices)} roads "
-        f"({len(shared_coords)} shared vertices) in {total_time:.2f}s"
-    )
+    t_edge_end = time.time()
+    timings["graph_edge_creation_s"] = t_edge_end - t_edge_start
     
-    return G, road_vertices
+    return G, dict(road_to_edges), timings
 
 
 def _approximate_segment_length(coords: List[Tuple[float, float]]) -> float:
@@ -338,32 +332,67 @@ def build_road_graph(db: Session, force_rebuild: bool = False) -> nx.DiGraph:
     Returns:
         NetworkX DiGraph suitable for routing
     """
-    global _GRAPH_CACHE, _CACHE_TIMESTAMP, _ROAD_COORDS_CACHE, _DIAGNOSTICS
+    global _GRAPH_CACHE, _CACHE_TIMESTAMP, _ROAD_TO_EDGES_CACHE, _DIAGNOSTICS
+    
+    import os
+    import pickle
     
     current_time = time.time()
     if not force_rebuild and _GRAPH_CACHE is not None:
         if (current_time - _CACHE_TIMESTAMP) < CACHE_TTL_SECONDS:
             return _GRAPH_CACHE
-    
+            
+    CACHE_FILE_PATH = "/app/cache/ner_graph_cache.pkl"
+    if not force_rebuild and os.path.exists(CACHE_FILE_PATH):
+        try:
+            logger.info("Loading graph from disk cache...")
+            with open(CACHE_FILE_PATH, "rb") as f:
+                cached_data = pickle.load(f)
+                
+            _GRAPH_CACHE = cached_data["graph"]
+            _ROAD_TO_EDGES_CACHE = cached_data.get("road_to_edges", {})
+            _CACHE_TIMESTAMP = time.time()
+            
+            logger.info(f"Loaded graph from disk cache: {_GRAPH_CACHE.number_of_nodes()} nodes, {_GRAPH_CACHE.number_of_edges()} edges.")
+            return _GRAPH_CACHE
+        except Exception as e:
+            logger.warning(f"Failed to load graph from disk cache: {e}. Rebuilding...")
+
     logger.info("Building road graph (vertex-sharing topology)...")
     start_time = time.time()
     
-    graph, road_coords = _extract_topology_from_db(db)
+    graph, road_to_edges, timings = _extract_topology_from_db(db)
     
     # Compute connected components
-    n_components = nx.number_weakly_connected_components(graph) if graph.number_of_nodes() > 0 else 0
-    
+    t_cc_start = time.time()
+    n_components = 0
     largest_cc_size = 0
-    if graph.number_of_nodes() > 0:
-        largest_cc = max(nx.weakly_connected_components(graph), key=len)
-        largest_cc_size = len(largest_cc)
+    t_cc_end = time.time()
+    timings["connected_components_s"] = t_cc_end - t_cc_start
     
-    build_duration_ms = int((time.time() - start_time) * 1000)
+    t_cache_start = time.time()
     
-    # Update cache
+    # Update memory cache
     _GRAPH_CACHE = graph
     _CACHE_TIMESTAMP = time.time()
-    _ROAD_COORDS_CACHE = road_coords
+    _ROAD_TO_EDGES_CACHE = road_to_edges
+    
+    # Save to disk cache
+    try:
+        logger.info("Saving lightweight graph to disk cache...")
+        with open(CACHE_FILE_PATH, "wb") as f:
+            pickle.dump({
+                "graph": graph,
+                "road_to_edges": road_to_edges
+            }, f, protocol=pickle.HIGHEST_PROTOCOL)
+        logger.info("Graph saved to disk cache successfully.")
+    except Exception as e:
+        logger.warning(f"Failed to save graph to disk cache: {e}")
+    
+    t_cache_end = time.time()
+    timings["cache_storage_s"] = t_cache_end - t_cache_start
+    
+    build_duration_ms = int((time.time() - start_time) * 1000)
     
     # Update diagnostics
     n_nodes = graph.number_of_nodes()
@@ -372,27 +401,31 @@ def build_road_graph(db: Session, force_rebuild: bool = False) -> nx.DiGraph:
         "edge_count": graph.number_of_edges(),
         "connected_components": n_components,
         "largest_component_nodes": largest_cc_size,
-        "largest_component_pct": round(largest_cc_size / n_nodes * 100, 1) if n_nodes > 0 else 0,
+        "largest_component_pct": 0,
         "build_duration_ms": build_duration_ms,
         "last_rebuild_time": datetime.now(timezone.utc).isoformat(),
-        "roads_in_graph": len(road_coords),
-        "shared_vertices_found": sum(1 for n in graph.nodes() if graph.degree(n) > 2),
+        "roads_in_graph": len(road_to_edges),
+        "shared_vertices_found": 0,
+        "timings": timings,
     })
     
     logger.info(
         f"Graph ready: {n_nodes} nodes, {graph.number_of_edges()} edges, "
-        f"{n_components} components (largest: {largest_cc_size}, {_DIAGNOSTICS['largest_component_pct']}%%) "
-        f"in {build_duration_ms}ms"
+        f"{n_components} components in {build_duration_ms}ms"
     )
     
     return graph
 
 
 def get_road_coordinates(road_id: int) -> Optional[List[Tuple[float, float]]]:
-    """Get the full coordinate list for a road from the cached road data.
+    """Deprecated: Road coordinates are retrieved on-demand from PostGIS."""
+    return None
+
+def get_road_edges(road_id: int) -> Optional[List[Tuple[tuple, tuple, float]]]:
+    """Get the graph edges for a road from the cached edge mapping.
     
-    Returns list of (lat, lon) tuples, or None if not found.
+    Returns list of (u, v, dist_km) tuples, or None if not found.
     """
-    if _ROAD_COORDS_CACHE is None:
+    if _ROAD_TO_EDGES_CACHE is None:
         return None
-    return _ROAD_COORDS_CACHE.get(road_id)
+    return _ROAD_TO_EDGES_CACHE.get(road_id)

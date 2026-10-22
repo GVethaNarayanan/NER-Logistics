@@ -38,3 +38,8 @@ integration_output.txt
 out.json
 openapi_dump.json
 test-output.txt
+
+cloudflared.exe
+scratch/
+scratch_*
+*.mjs

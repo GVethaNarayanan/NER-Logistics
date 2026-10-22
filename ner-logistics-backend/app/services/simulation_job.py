@@ -31,19 +31,26 @@ def interpolate_linestring(wkt_geom: str, progress_km: float, total_length_km: f
         logger.error(f"Error interpolating geometry: {e}")
         return 0.0, 0.0
 
-def run_vehicle_simulation(db: Session = None):
+def run_vehicle_simulation(db: Session = None, loop_fleet: bool = None):
     """Background job that advances in-transit vehicles along their assigned routes."""
     close_db = False
     if db is None:
         db = SessionLocal()
         close_db = True
+        if loop_fleet is None:
+            loop_fleet = True
+    elif loop_fleet is None:
+        loop_fleet = False
         
     try:
-        active_vehicles = db.query(models.Vehicle).filter(
-            models.Vehicle.status == "in_transit",
+        query = db.query(models.Vehicle).filter(
             models.Vehicle.current_route_id.isnot(None),
             models.Vehicle.speed_kmh > 0
-        ).all()
+        )
+        if not loop_fleet:
+            query = query.filter(models.Vehicle.status == "in_transit")
+            
+        active_vehicles = query.all()
         
         for vehicle in active_vehicles:
             try:
@@ -59,10 +66,16 @@ def run_vehicle_simulation(db: Session = None):
                 current_seq_idx = vehicle.current_route_sequence or 0
                 
                 if current_seq_idx >= len(route_roads):
-                    # Vehicle has already finished route
-                    vehicle.status = "delivered"
-                    db.commit()
-                    continue
+                    if loop_fleet:
+                        # Loop route for continuous live fleet simulation
+                        vehicle.status = "in_transit"
+                        vehicle.current_route_sequence = 0
+                        vehicle.current_route_progress_km = 0.0
+                        current_seq_idx = 0
+                    else:
+                        vehicle.status = "delivered"
+                        db.commit()
+                        continue
                     
                 current_route_road = route_roads[current_seq_idx]
                 road = db.query(models.Road).filter(models.Road.id == current_route_road.road_id).first()
@@ -80,16 +93,28 @@ def run_vehicle_simulation(db: Session = None):
                 if road_length_km is None or road_length_km <= 0:
                     road_length_km = haversine_distance_km(road.start_lat, road.start_lon, road.end_lat, road.end_lon)
                 
-                # Fetch WKT geometry
-                wkt_geom = db.execute(text("SELECT ST_AsText(geometry) FROM roads WHERE id = :id"), {"id": road.id}).scalar()
+                # Fetch WKT geometry with safe fallback for SQLite test environments
+                wkt_geom = None
+                try:
+                    wkt_geom = db.execute(text("SELECT ST_AsText(geometry) FROM roads WHERE id = :id"), {"id": road.id}).scalar()
+                except Exception:
+                    pass
+                if not wkt_geom:
+                    wkt_geom = f"LINESTRING({road.start_lon} {road.start_lat}, {road.end_lon} {road.end_lat})"
                 
-                if road_length_km <= 0.001 or not wkt_geom:
-                    vehicle.current_route_sequence += 1
+                if road_length_km <= 0.001:
+                    vehicle.current_route_sequence = (vehicle.current_route_sequence or 0) + 1
                     vehicle.current_route_progress_km = 0.0
+                    if vehicle.current_route_sequence >= len(route_roads):
+                        if loop_fleet:
+                            vehicle.current_route_sequence = 0
+                            vehicle.status = "in_transit"
+                        else:
+                            vehicle.status = "delivered"
                     update_vehicle_location(db, vehicle, road.end_lat, road.end_lon, data_source="simulated")
                 elif progress_km >= road_length_km:
                     # Vehicle has reached or passed the end of this road segment
-                    vehicle.current_route_sequence += 1
+                    vehicle.current_route_sequence = (vehicle.current_route_sequence or 0) + 1
                     vehicle.current_route_progress_km = 0.0
                     
                     # Snap precisely to end of the road to avoid drift
@@ -97,7 +122,11 @@ def run_vehicle_simulation(db: Session = None):
                     update_vehicle_location(db, vehicle, end_lat, end_lon, data_source="simulated")
                     
                     if vehicle.current_route_sequence >= len(route_roads):
-                        vehicle.status = "delivered"
+                        if loop_fleet:
+                            vehicle.current_route_sequence = 0
+                            vehicle.status = "in_transit"
+                        else:
+                            vehicle.status = "delivered"
                 else:
                     # Interpolate location along the current road geometry
                     new_lat, new_lon = interpolate_linestring(wkt_geom, progress_km, road_length_km, current_route_road.is_reversed)

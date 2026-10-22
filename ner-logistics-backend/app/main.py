@@ -40,8 +40,28 @@ from app.services.ml_service import ml_service
 async def lifespan(app: FastAPI):
     # Load Tier 2 ML Model (skip during pytest to preserve legacy test determinism)
     import sys
+    import threading
     if "pytest" not in sys.modules:
         ml_service.load_model()
+    
+    # Preload road graph in background thread so first route request is instant
+    def _preload_graph():
+        try:
+            from app.database import SessionLocal
+            from app.services.graph_service import build_road_graph
+            logger.info("Preloading road graph in background thread...")
+            db = SessionLocal()
+            try:
+                build_road_graph(db)
+                logger.info("Road graph preloaded successfully!")
+            finally:
+                db.close()
+        except Exception as e:
+            logger.warning(f"Background graph preload failed: {e}")
+    
+    if "pytest" not in sys.modules:
+        threading.Thread(target=_preload_graph, daemon=True).start()
+    
     # Start the vehicle GPS simulation background task
     start_scheduler()
     yield

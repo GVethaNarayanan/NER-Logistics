@@ -14,7 +14,16 @@ interface RoutePlannerPanelProps {
   routeLoading: boolean
   routeError: string | null
   routeResult: RouteResponse | null
+  onStartNavigation?: () => void
+  isNavigating?: boolean
+  onSetRoutePresets?: (orig: LatLngTuple, dest: LatLngTuple) => void
 }
+
+const PRESET_CORRIDORS: Array<{ name: string; origin: LatLngTuple; dest: LatLngTuple; label: string }> = [
+  { name: 'Guwahati ➔ Itanagar', origin: [26.1824, 91.7539], dest: [27.0970, 93.6166], label: 'GHY ➔ ITA (Arunachal)' },
+  { name: 'Shillong ➔ Silchar', origin: [25.5788, 91.8933], dest: [24.8333, 92.7789], label: 'SHL ➔ SIL (Assam/Meghalaya)' },
+  { name: 'Tezpur ➔ Bomdila', origin: [26.6528, 92.7926], dest: [27.2645, 92.4229], label: 'TEZ ➔ BOM (Hills)' },
+]
 
 export const RoutePlannerPanel: React.FC<RoutePlannerPanelProps> = ({
   origin,
@@ -24,17 +33,46 @@ export const RoutePlannerPanel: React.FC<RoutePlannerPanelProps> = ({
   onCalculateRoute,
   routeLoading,
   routeError,
-  routeResult
+  routeResult,
+  onStartNavigation,
+  isNavigating = false,
+  onSetRoutePresets
 }) => {
   const [preference, setPreference] = useState<'shortest' | 'safest'>('shortest')
   const { t } = useTranslation()
 
   return (
     <div className="bg-card border rounded-lg p-4 shadow-sm flex flex-col gap-4">
-      <h3 className="font-semibold text-sm flex items-center gap-2">
-        <Navigation className="w-4 h-4 text-primary" />
-        {t('dashboard.route_planner', 'Route Planner')}
-      </h3>
+      <div className="flex items-center justify-between">
+        <h3 className="font-semibold text-sm flex items-center gap-2">
+          <Navigation className="w-4 h-4 text-primary" />
+          {t('dashboard.route_planner', 'Route Planner')}
+        </h3>
+        <span className="text-[10px] font-medium bg-primary/10 text-primary px-2 py-0.5 rounded-full">
+          Live GPS
+        </span>
+      </div>
+
+      {/* Quick Corridor Selection */}
+      {onSetRoutePresets && (
+        <div className="flex flex-col gap-1.5">
+          <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+            ⚡ Quick Corridors
+          </span>
+          <div className="flex flex-wrap gap-1.5">
+            {PRESET_CORRIDORS.map((c) => (
+              <button
+                key={c.name}
+                type="button"
+                onClick={() => onSetRoutePresets(c.origin, c.dest)}
+                className="text-[11px] font-medium py-1 px-2.5 rounded-md border bg-muted/40 hover:bg-primary hover:text-primary-foreground hover:border-primary transition-all text-left shadow-xs"
+              >
+                {c.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="flex flex-col gap-2">
         <button 
@@ -127,6 +165,116 @@ export const RoutePlannerPanel: React.FC<RoutePlannerPanelProps> = ({
             }`}>
               {t(`dashboard.risk_${(routeResult.properties as any).risk_level?.toLowerCase()}`, (routeResult.properties as any).risk_level) as string}
             </span>
+          </div>
+
+          {/* Start Navigation CTA */}
+          {onStartNavigation && (
+            <button
+              onClick={onStartNavigation}
+              className={`w-full mt-1 py-2.5 px-3 rounded-lg font-bold text-xs shadow-md flex items-center justify-center gap-2 transition-all active:scale-[0.98] ${
+                isNavigating
+                  ? 'bg-amber-600 hover:bg-amber-700 text-white animate-pulse'
+                  : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+              }`}
+            >
+              <Navigation className="w-4 h-4 fill-white" />
+              <span>{isNavigating ? '● Active Navigation Running (Click to Focus)' : 'Start Live Navigation & Direction'}</span>
+            </button>
+          )}
+
+          {/* Bridges on Selected Route */}
+          <div className="mt-2 pt-2 border-t flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold flex items-center gap-1.5 text-foreground">
+                <span>🌉</span> Bridges on Route:
+              </span>
+              <span className="text-xs font-bold px-2 py-0.5 bg-muted rounded-full">
+                {(routeResult.properties as any).bridge_count || 0}
+              </span>
+            </div>
+
+            {((routeResult.properties as any).bridge_count > 0) ? (
+              <>
+                {/* Condition badges breakdown */}
+                <div className="flex gap-1.5 text-[11px]">
+                  <span className="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-600 font-semibold border border-emerald-500/30">
+                    ✓ {(routeResult.properties as any).bridges_good || 0} Good
+                  </span>
+                  <span className="px-2 py-0.5 rounded bg-amber-500/15 text-amber-600 font-semibold border border-amber-500/30">
+                    ! {(routeResult.properties as any).bridges_fair || 0} Fair
+                  </span>
+                  <span className="px-2 py-0.5 rounded bg-red-500/15 text-red-600 font-semibold border border-red-500/30">
+                    ✕ {(routeResult.properties as any).bridges_poor || 0} Poor
+                  </span>
+                </div>
+
+                {/* High-risk warning if any poor/critical bridges exist */}
+                {((routeResult.properties as any).bridges_poor > 0) && (
+                  <div className="bg-red-500/10 border border-red-500/30 text-red-600 p-2 rounded text-xs flex items-start gap-1.5">
+                    <span className="text-sm">⚠️</span>
+                    <div>
+                      <strong>Bridge Alert:</strong> {(routeResult.properties as any).bridges_poor} bridge(s) in <strong>POOR</strong> condition along this corridor!
+                      {(routeResult.properties as any).poor_causes?.length > 0 && (
+                        <div className="mt-1 font-semibold text-[11px] text-red-700 dark:text-red-400">
+                          🚨 Hazard Cause: {(routeResult.properties as any).poor_causes.join(', ')}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Clear & Safe Route Notice for Safest Route */}
+                {((routeResult.properties as any).route_preference === 'safest' && (routeResult.properties as any).bridges_poor === 0) && (
+                  <div className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-400 p-2 rounded text-xs flex items-start gap-1.5">
+                    <span className="text-sm">✅</span>
+                    <div>
+                      <strong>Clear & Safe Route:</strong> All hazardous bridges and landslide zones bypassed. Safe corridor verified.
+                    </div>
+                  </div>
+                )}
+
+                {/* Bridges item list */}
+                <div className="max-h-48 overflow-y-auto space-y-1.5 pr-0.5 mt-1">
+                  {(routeResult.properties as any).bridges?.map((b: any, idx: number) => {
+                    const isPoor = b.condition === 'poor' || b.condition === 'critical'
+                    const isFair = b.condition === 'fair' || b.condition === 'repair_needed'
+                    const badgeClass = isPoor
+                      ? 'bg-red-500/15 text-red-600 border-red-500/30'
+                      : isFair
+                      ? 'bg-amber-500/15 text-amber-600 border-amber-500/30'
+                      : 'bg-emerald-500/15 text-emerald-600 border-emerald-500/30'
+
+                    return (
+                      <div
+                        key={`bridge-item-${b.id || idx}`}
+                        className="text-[11px] p-2 rounded bg-card border flex flex-col gap-1 shadow-xs"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="truncate max-w-[170px] font-medium" title={b.name}>
+                            {b.name}
+                          </span>
+                          <span className={`px-1.5 py-0.5 rounded font-bold uppercase text-[9px] border ${badgeClass}`}>
+                            {isPoor ? 'POOR' : isFair ? 'FAIR' : 'GOOD'}
+                          </span>
+                        </div>
+                        {b.cause && (
+                          <div className="flex items-center justify-between text-[10px] text-muted-foreground pt-1 border-t border-border/40">
+                            <span className="font-semibold flex items-center gap-1" style={{ color: isPoor ? '#ef4444' : isFair ? '#f59e0b' : '#10b981' }}>
+                              <span>{isPoor ? '🚨 Cause:' : isFair ? '⚠️ Issue:' : 'Status:'}</span>
+                              <span className="truncate max-w-[190px]">{b.cause}</span>
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </>
+            ) : (
+              <p className="text-[11px] text-muted-foreground italic">
+                No major river bridge crossings on this specific path.
+              </p>
+            )}
           </div>
         </div>
       )}

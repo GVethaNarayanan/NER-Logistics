@@ -115,6 +115,23 @@ def create_incident(
         status="reported",
         synced="synced"
     )
+    # Auto-snap to nearest road if road_id is not explicitly specified
+    if db_incident.road_id is None and db_incident.latitude is not None and db_incident.longitude is not None:
+        try:
+            from sqlalchemy import text
+            nearest = db.execute(text("""
+                SELECT r.id as road_id
+                FROM roads r
+                WHERE r.geometry IS NOT NULL
+                  AND r.is_legacy = false
+                ORDER BY r.geometry <-> ST_SetSRID(ST_Point(:lon, :lat), 4326)
+                LIMIT 1
+            """), {"lon": db_incident.longitude, "lat": db_incident.latitude}).fetchone()
+            if nearest:
+                db_incident.road_id = nearest[0]
+        except Exception:
+            pass
+
     db.add(db_incident)
     db.commit()
     db.refresh(db_incident)

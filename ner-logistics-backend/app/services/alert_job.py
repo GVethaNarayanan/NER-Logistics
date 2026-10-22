@@ -16,7 +16,7 @@ from datetime import datetime, timezone, timedelta
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
 from app import models
-from app.services.risk_engine import compute_risk_score
+from app.services.risk_engine import compute_risk_score, compute_bulk_risk_scores
 from app.database import SessionLocal
 
 logger = logging.getLogger("ner_logistics.alert_job")
@@ -119,15 +119,12 @@ def evaluate_road_alerts(db: Session) -> dict:
         if b.road_id:
             bridges_by_road.setdefault(b.road_id, []).append(b)
 
+    # First pass: gather all features for bulk ML prediction
+    features_list = []
     for road in roads:
-        # Get weather match (may be missing)
         wmatch = weather_results.get(road.id, _make_missing_result())
-
-        # Use effective_rainfall_mm which applies uncertainty penalty
-        # for missing weather (Correction 4: missing ≠ safe)
         rainfall_mm = wmatch.effective_rainfall_mm
 
-        # Bridge condition
         bridge_condition = "good"
         road_bridges = bridges_by_road.get(road.id, [])
         bridge_conds = [b.condition for b in road_bridges]
@@ -137,15 +134,21 @@ def evaluate_road_alerts(db: Session) -> dict:
             bridge_condition = "fair"
 
         recent_incidents = incidents_by_road.get(road.id, 0)
+        
+        features_list.append({
+            "rainfall_mm": rainfall_mm,
+            "road_condition": getattr(road, "condition", "fair"),
+            "bridge_condition": bridge_condition,
+            "recent_incidents": recent_incidents,
+            "terrain_difficulty": getattr(road, "terrain_difficulty", 0.3)
+        })
 
-        # Compute risk using existing Phase 10 Tier 1/Tier 2 pipeline
-        risk_output = compute_risk_score(
-            rainfall_mm=rainfall_mm,
-            road_condition=getattr(road, "condition", "fair"),
-            bridge_condition=bridge_condition,
-            recent_incidents=recent_incidents,
-            terrain_difficulty=getattr(road, "terrain_difficulty", 0.3),
-        )
+    # Bulk compute all risk scores at once (vectorized ML prediction)
+    bulk_results = compute_bulk_risk_scores(features_list)
+
+    # Second pass: evaluate alerts based on computed scores
+    for road, risk_output in zip(roads, bulk_results):
+        wmatch = weather_results.get(road.id, _make_missing_result())
         risk_level = risk_output["risk_level"]
         risk_score = risk_output["risk_score"]
         prediction_source = risk_output.get("prediction_source", "tier1_fallback")

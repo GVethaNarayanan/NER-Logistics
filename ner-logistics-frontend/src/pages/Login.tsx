@@ -12,7 +12,7 @@ export const Login: React.FC = () => {
   const location = useLocation()
   const { login, isAuthenticated } = useAuth()
   const { t } = useTranslation()
-  
+
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<ApiError | Error | string | null>(null)
@@ -36,11 +36,15 @@ export const Login: React.FC = () => {
         password,
         scope: '',
       })
-      
+
       await login(tokens.access_token, tokens.refresh_token)
       // The useEffect will handle the redirect once AuthContext updates
     } catch (err: any) {
-      setError(err)
+      if (err instanceof ApiError && err.code === 401) {
+        setError(t('auth.invalid_credentials', 'Invalid username/email or password. Please check your credentials and try again.'))
+      } else {
+        setError(err)
+      }
       setIsLoading(false)
     }
   }

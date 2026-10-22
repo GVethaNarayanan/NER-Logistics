@@ -23,7 +23,11 @@ export const ErrorState: React.FC<ErrorStateProps> = ({ error, onRetry, title })
       is422 = true
       validationDetails = error.detail
     } else if (error.code === 401) {
-      message = t('errors.unauthorized', 'Session expired. Please log in again.')
+      if (error.message && error.message !== 'Unauthorized' && error.message !== '401' && !error.message.includes('status code 401')) {
+        message = error.message
+      } else {
+        message = t('errors.unauthorized', 'Session expired. Please log in again.')
+      }
     } else if (error.code === 403) {
       message = t('errors.forbidden', 'No permission for this action.')
     }

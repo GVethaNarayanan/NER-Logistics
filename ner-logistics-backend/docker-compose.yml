@@ -4,13 +4,16 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - DATABASE_URL=postgresql://postgres:postgres@db:5432/ner_logistics
+      - DATABASE_URL=postgresql+psycopg2://postgres:postgres@db:5432/ner_logistics
       - CORS_ORIGINS=*
       - LOG_LEVEL=INFO
       - VEHICLE_SIMULATION_ENABLED=true
     depends_on:
       db:
         condition: service_healthy
+    volumes:
+      - ./app:/app/app
+      - graph_cache:/app/cache
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8000/" ]
       interval: 10s
@@ -36,3 +39,4 @@ services:
 
 volumes:
   postgres_data:
+  graph_cache:
