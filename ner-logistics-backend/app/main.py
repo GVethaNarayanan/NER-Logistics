@@ -59,7 +59,7 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.warning(f"Background graph preload failed: {e}")
     
-    if "pytest" not in sys.modules:
+    if os.environ.get("PRELOAD_GRAPH", "false").lower() == "true":
         threading.Thread(target=_preload_graph, daemon=True).start()
     
     # Start the vehicle GPS simulation background task
