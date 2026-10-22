@@ -21,4 +21,5 @@ httpx
 apscheduler
 alembic
 psycopg2-binary
+psycopg[binary]
 geoalchemy2
