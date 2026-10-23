@@ -165,7 +165,7 @@ export const Home: React.FC = () => {
         maxLon: ne.lng, maxLat: ne.lat,
         zoom: viewport.zoom,
         districtId: selectedDistrictId,
-        limit: 1000
+        limit: 350
       }).then(result => {
         if (isMounted) {
           setRoadGeoJSON({ type: "FeatureCollection", features: result.features })
@@ -176,7 +176,7 @@ export const Home: React.FC = () => {
       }).finally(() => {
         if (isMounted) setRoadsLoading(false)
       })
-    }, 120)
+    }, 250)
 
     return () => {
       isMounted = false
@@ -543,37 +543,35 @@ export const Home: React.FC = () => {
           isAutoFollow={isAutoFollow}
         />
 
-        {(roadsLoading && bridgesLoading) ? (
-          <div className="flex w-full h-full items-center justify-center">
-            <div className="text-muted-foreground animate-pulse flex flex-col items-center gap-4">
-              <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
-              <p>Loading NER Infrastructure...</p>
-            </div>
+        <MapComponent 
+          roadGeoJSON={roadGeoJSON} 
+          totalRoadsInView={totalRoadsInView}
+          currentZoom={viewport.zoom}
+          onViewportChange={handleViewportChange}
+          bridges={visibleBridges} 
+          vehicles={vehicles}
+          onDistrictSelect={() => {}}
+          onRoadSelect={setSelectedRoad}
+          onMapClick={handleMapClick}
+          origin={origin}
+          destination={destination}
+          routeGeoJSON={routeResult}
+          targetView={targetView}
+          navigatingUser={{
+            lat: navProgress.currentLat,
+            lon: navProgress.currentLon,
+            heading: navProgress.heading,
+            speedKmh: navProgress.speedKmh,
+            isNavigating,
+            isAutoFollow,
+          }}
+        />
+
+        {roadsLoading && (
+          <div className="absolute top-4 left-4 z-[400] bg-background/90 backdrop-blur border px-3 py-1.5 rounded-full shadow-md flex items-center gap-2 text-xs font-medium text-muted-foreground pointer-events-none">
+            <div className="w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+            <span>Loading road network...</span>
           </div>
-        ) : (
-          <MapComponent 
-            roadGeoJSON={roadGeoJSON} 
-            totalRoadsInView={totalRoadsInView}
-            currentZoom={viewport.zoom}
-            onViewportChange={handleViewportChange}
-            bridges={visibleBridges} 
-            vehicles={vehicles}
-            onDistrictSelect={() => {}}
-            onRoadSelect={setSelectedRoad}
-            onMapClick={handleMapClick}
-            origin={origin}
-            destination={destination}
-            routeGeoJSON={routeResult}
-            targetView={targetView}
-            navigatingUser={{
-              lat: navProgress.currentLat,
-              lon: navProgress.currentLon,
-              heading: navProgress.heading,
-              speedKmh: navProgress.speedKmh,
-              isNavigating,
-              isAutoFollow,
-            }}
-          />
         )}
       </div>
       

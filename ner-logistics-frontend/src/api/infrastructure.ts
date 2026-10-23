@@ -87,8 +87,8 @@ export const infrastructureApi = {
     return normalizePagination<BridgeOut>(res)
   },
 
-  async getBridges(): Promise<PaginatedData<BridgeOut>> {
-    return fetchAllPaginated((skip, limit) => this.getBridgesPage(skip, limit), 100)
+  async getBridges(limit = 100): Promise<PaginatedData<BridgeOut>> {
+    return this.getBridgesPage(0, limit)
   },
 
   async getDistrictConnectivity(districtId: number): Promise<DistrictConnectivity> {

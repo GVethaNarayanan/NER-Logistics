@@ -150,9 +150,12 @@ const MapMoveHandler: React.FC<{ onChange?: (bounds: LatLngBounds, zoom: number)
     zoomend() { if (onChange) onChange(map.getBounds(), map.getZoom()) },
   })
 
-  // Trigger initial change
+  const hasFiredRef = React.useRef(false)
   React.useEffect(() => {
-    if (onChange) onChange(map.getBounds(), map.getZoom())
+    if (!hasFiredRef.current && onChange) {
+      hasFiredRef.current = true
+      onChange(map.getBounds(), map.getZoom())
+    }
   }, [map, onChange])
 
   return null
