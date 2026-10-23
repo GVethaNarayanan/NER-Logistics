@@ -236,6 +236,11 @@ def batch_match_weather_for_roads(
     if road_ids is not None and len(road_ids) == 0:
         return {}
 
+    # Fast check: If no weather snapshots exist in the DB, return empty dict immediately
+    has_snapshots = db.execute(text("SELECT 1 FROM weather_snapshots LIMIT 1")).fetchone()
+    if not has_snapshots:
+        return {}
+
     # Build the road filter clause
     if road_ids is not None:
         road_filter = "AND r.id = ANY(:road_ids)"

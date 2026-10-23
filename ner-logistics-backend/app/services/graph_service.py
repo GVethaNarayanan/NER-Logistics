@@ -67,6 +67,8 @@ _DIAGNOSTICS: Dict = {
     "shared_vertices_found": 0,
 }
 
+_CURRENT_BBOX: Optional[Tuple[float, float, float, float]] = None
+
 
 def get_graph_diagnostics() -> dict:
     """Return diagnostic information about the routing graph cache."""
@@ -75,11 +77,12 @@ def get_graph_diagnostics() -> dict:
 
 def invalidate_graph_cache():
     """Manually invalidate the graph cache, forcing rebuild on next access."""
-    global _GRAPH_CACHE, _CACHE_TIMESTAMP, _ROAD_COORDS_CACHE, _ROAD_TO_EDGES_CACHE
+    global _GRAPH_CACHE, _CACHE_TIMESTAMP, _ROAD_COORDS_CACHE, _ROAD_TO_EDGES_CACHE, _CURRENT_BBOX
     _GRAPH_CACHE = None
     _CACHE_TIMESTAMP = 0.0
     _ROAD_COORDS_CACHE = None
     _ROAD_TO_EDGES_CACHE = None
+    _CURRENT_BBOX = None
     logger.info("Graph cache manually invalidated.")
 
 
@@ -98,6 +101,7 @@ def _round_point(lat: float, lon: float) -> Tuple[float, float]:
     """Round a (lat, lon) point to standardized precision."""
     return (_round_coord(lat), _round_coord(lon))
 
+
 def _approximate_segment_length(coords: List[Tuple[float, float]]) -> float:
     """Calculate the haversine length of a line string segment."""
     from app.services.routing_service import haversine_distance_km
@@ -110,35 +114,58 @@ def _approximate_segment_length(coords: List[Tuple[float, float]]) -> float:
 
 # ── Topology Extraction ─────────────────────────────────────────────────────
 
-def _extract_topology_from_db(db: Session) -> Tuple[nx.DiGraph, Dict[int, List[Tuple[float, float]]], Dict[int, List[Tuple[tuple, tuple, dict]]], dict]:
+def _extract_topology_from_db(
+    db: Session,
+    bbox: Optional[Tuple[float, float, float, float]] = None
+) -> Tuple[nx.DiGraph, Dict[int, List[Tuple[tuple, tuple, float]]], dict]:
     """Build a routable DiGraph using vertex-sharing topology.
     
+    If bbox is provided (min_lon, min_lat, max_lon, max_lat), only roads
+    intersecting that corridor are queried, yielding sub-second query performance.
+    
     Returns:
-        (graph, road_coords_map, road_to_edges_map, timings)
+        (graph, road_to_edges_map, timings)
     """
     timings = {}
     
-    # ── Step 1: Fetch all road vertices from PostGIS ────────────────────
+    # ── Step 1: Fetch road vertices from PostGIS ─────────────────────────
     t_fetch_start = time.time()
-    logger.info("Fetching road vertices from PostGIS...")
+    logger.info(f"Fetching road vertices from PostGIS (bbox={bbox})...")
     
     engine = db.get_bind()
     raw_conn = engine.raw_connection()
     try:
         with raw_conn.cursor(name='fetch_roads_stream') as cursor:
             cursor.itersize = 2000
-            cursor.execute("""
-                SELECT r.id as road_id,
-                       r.road_type,
-                       r.osm_tags,
-                       ST_NPoints(r.geometry) as n_vertices,
-                       ST_Length(r.geometry::geography) as total_length_m,
-                       ST_AsText(r.geometry) as wkt
-                FROM roads r
-                WHERE r.geometry IS NOT NULL
-                  AND r.status = 'open'
-                  AND r.is_legacy = false
-            """)
+            if bbox:
+                sql = """
+                    SELECT r.id as road_id,
+                           r.road_type,
+                           r.osm_tags,
+                           ST_NPoints(r.geometry) as n_vertices,
+                           ST_Length(r.geometry::geography) as total_length_m,
+                           ST_AsText(r.geometry) as wkt
+                    FROM roads r
+                    WHERE r.geometry IS NOT NULL
+                      AND r.status = 'open'
+                      AND r.is_legacy = false
+                      AND ST_Intersects(r.geometry, ST_MakeEnvelope(%s, %s, %s, %s, 4326))
+                """
+                cursor.execute(sql, (bbox[0], bbox[1], bbox[2], bbox[3]))
+            else:
+                sql = """
+                    SELECT r.id as road_id,
+                           r.road_type,
+                           r.osm_tags,
+                           ST_NPoints(r.geometry) as n_vertices,
+                           ST_Length(r.geometry::geography) as total_length_m,
+                           ST_AsText(r.geometry) as wkt
+                    FROM roads r
+                    WHERE r.geometry IS NOT NULL
+                      AND r.status = 'open'
+                      AND r.is_legacy = false
+                """
+                cursor.execute(sql)
             
             t_fetch_end = time.time()
             timings["db_fetch_stream_s"] = t_fetch_end - t_fetch_start
@@ -316,34 +343,45 @@ def _approximate_segment_length(coords: List[Tuple[float, float]]) -> float:
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
-def build_road_graph(db: Session, force_rebuild: bool = False) -> nx.DiGraph:
+def build_road_graph(
+    db: Session,
+    bbox: Optional[Tuple[float, float, float, float]] = None,
+    force_rebuild: bool = False
+) -> nx.DiGraph:
     """Build or return cached routable DiGraph from OSM road data.
     
-    Uses vertex-sharing topology: roads are connected wherever they share
-    a coordinate vertex (after rounding to 7 decimal places).
-    
-    The graph is cached per-process with a configurable TTL.
-    Risk scoring is NOT applied during build — use deferred scoring at routing time.
+    If bbox is provided, only extracts roads in the corridor, completing in ~2-3s.
+    Subsequent route requests in the same corridor hit the in-memory cache in 0ms.
     
     Args:
         db: SQLAlchemy session for database access
+        bbox: Optional (min_lon, min_lat, max_lon, max_lat) corridor bounding box
         force_rebuild: If True, ignore cache and rebuild
         
     Returns:
         NetworkX DiGraph suitable for routing
     """
-    global _GRAPH_CACHE, _CACHE_TIMESTAMP, _ROAD_TO_EDGES_CACHE, _DIAGNOSTICS
+    global _GRAPH_CACHE, _CACHE_TIMESTAMP, _ROAD_TO_EDGES_CACHE, _DIAGNOSTICS, _CURRENT_BBOX
     
     import os
     import pickle
     
     current_time = time.time()
     if not force_rebuild and _GRAPH_CACHE is not None:
-        if (current_time - _CACHE_TIMESTAMP) < CACHE_TTL_SECONDS:
-            return _GRAPH_CACHE
+        if bbox is None:
+            if (current_time - _CACHE_TIMESTAMP) < CACHE_TTL_SECONDS:
+                return _GRAPH_CACHE
+        elif _CURRENT_BBOX is not None:
+            # Check if requested corridor is already contained within current cached bbox
+            c_min_lon, c_min_lat, c_max_lon, c_max_lat = _CURRENT_BBOX
+            r_min_lon, r_min_lat, r_max_lon, r_max_lat = bbox
+            if (c_min_lon <= r_min_lon and c_min_lat <= r_min_lat and
+                c_max_lon >= r_max_lon and c_max_lat >= r_max_lat):
+                if (current_time - _CACHE_TIMESTAMP) < CACHE_TTL_SECONDS:
+                    return _GRAPH_CACHE
             
     CACHE_FILE_PATH = "/app/cache/ner_graph_cache.pkl"
-    if not force_rebuild and os.path.exists(CACHE_FILE_PATH):
+    if not force_rebuild and bbox is None and os.path.exists(CACHE_FILE_PATH):
         try:
             logger.info("Loading graph from disk cache...")
             with open(CACHE_FILE_PATH, "rb") as f:
@@ -351,6 +389,7 @@ def build_road_graph(db: Session, force_rebuild: bool = False) -> nx.DiGraph:
                 
             _GRAPH_CACHE = cached_data["graph"]
             _ROAD_TO_EDGES_CACHE = cached_data.get("road_to_edges", {})
+            _CURRENT_BBOX = None
             _CACHE_TIMESTAMP = time.time()
             
             logger.info(f"Loaded graph from disk cache: {_GRAPH_CACHE.number_of_nodes()} nodes, {_GRAPH_CACHE.number_of_edges()} edges.")
@@ -358,10 +397,10 @@ def build_road_graph(db: Session, force_rebuild: bool = False) -> nx.DiGraph:
         except Exception as e:
             logger.warning(f"Failed to load graph from disk cache: {e}. Rebuilding...")
 
-    logger.info("Building road graph (vertex-sharing topology)...")
+    logger.info(f"Building road graph (vertex-sharing topology, bbox={bbox})...")
     start_time = time.time()
     
-    graph, road_to_edges, timings = _extract_topology_from_db(db)
+    graph, road_to_edges, timings = _extract_topology_from_db(db, bbox=bbox)
     
     # Compute connected components
     t_cc_start = time.time()
@@ -376,18 +415,20 @@ def build_road_graph(db: Session, force_rebuild: bool = False) -> nx.DiGraph:
     _GRAPH_CACHE = graph
     _CACHE_TIMESTAMP = time.time()
     _ROAD_TO_EDGES_CACHE = road_to_edges
+    _CURRENT_BBOX = bbox
     
-    # Save to disk cache
-    try:
-        logger.info("Saving lightweight graph to disk cache...")
-        with open(CACHE_FILE_PATH, "wb") as f:
-            pickle.dump({
-                "graph": graph,
-                "road_to_edges": road_to_edges
-            }, f, protocol=pickle.HIGHEST_PROTOCOL)
-        logger.info("Graph saved to disk cache successfully.")
-    except Exception as e:
-        logger.warning(f"Failed to save graph to disk cache: {e}")
+    # Save to disk cache if full graph
+    if bbox is None:
+        try:
+            logger.info("Saving lightweight graph to disk cache...")
+            with open(CACHE_FILE_PATH, "wb") as f:
+                pickle.dump({
+                    "graph": graph,
+                    "road_to_edges": road_to_edges
+                }, f, protocol=pickle.HIGHEST_PROTOCOL)
+            logger.info("Graph saved to disk cache successfully.")
+        except Exception as e:
+            logger.warning(f"Failed to save graph to disk cache: {e}")
     
     t_cache_end = time.time()
     timings["cache_storage_s"] = t_cache_end - t_cache_start
