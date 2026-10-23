@@ -113,24 +113,64 @@ export const Login: React.FC = () => {
                 type="submit"
                 disabled={isLoading}
                 className={cn(
-                  "inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors",
+                  "inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-semibold transition-colors",
                   "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
                   "disabled:pointer-events-none disabled:opacity-50",
-                  "bg-primary text-primary-foreground shadow hover:bg-primary/90 h-9 px-4 py-2"
+                  "bg-primary text-primary-foreground shadow hover:bg-primary/90 h-10 px-4 py-2"
                 )}
               >
                 {isLoading ? t('auth.signing_in', 'Signing In...') : t('auth.sign_in_button', 'Sign In')}
               </button>
+
+              <div className="relative my-2">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-background px-2 text-muted-foreground font-semibold">
+                    New to NER Logistics?
+                  </span>
+                </div>
+              </div>
+
+              <Link
+                to="/register"
+                className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-semibold transition-colors border border-input bg-muted/40 hover:bg-muted text-foreground h-10 px-4 py-2 shadow-sm"
+              >
+                ✨ Create New Account (Register)
+              </Link>
             </div>
           </form>
         </div>
 
-        <p className="px-8 text-center text-sm text-muted-foreground">
-          {t('auth.no_account', 'Don\'t have an account?')} {' '}
-          <Link to="/register" className="underline underline-offset-4 hover:text-primary">
-            {t('auth.register_link', 'Register')}
-          </Link>
-        </p>
+        {/* Quick Demo Credentials for Reviewers */}
+        <div className="p-3 bg-muted/40 border rounded-lg text-xs space-y-2">
+          <p className="font-semibold text-muted-foreground text-center">⚡ Quick Demo Logins (1-Click Fill):</p>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setUsername('Vetha')
+                setPassword('Vetha_2006')
+              }}
+              className="py-1.5 px-2 bg-background border hover:border-primary rounded text-[11px] font-medium text-left truncate transition-colors shadow-sm"
+              title="Field Official: Vetha / Vetha_2006"
+            >
+              🧑‍💼 <span className="font-bold">Field Official</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setUsername('admin')
+                setPassword('admin123')
+              }}
+              className="py-1.5 px-2 bg-background border hover:border-primary rounded text-[11px] font-medium text-left truncate transition-colors shadow-sm"
+              title="Admin: admin / admin123"
+            >
+              🛡️ <span className="font-bold">Administrator</span>
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   )

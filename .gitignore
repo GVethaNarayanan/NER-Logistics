@@ -43,3 +43,4 @@ cloudflared.exe
 scratch/
 scratch_*
 *.mjs
+*.dump

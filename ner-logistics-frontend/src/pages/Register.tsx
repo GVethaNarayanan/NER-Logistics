@@ -4,11 +4,13 @@ import { authApi } from '../api/auth'
 import { ApiError } from '../api/client'
 import { cn } from '../lib/utils'
 import { useTranslation } from 'react-i18next'
+import { useAuth } from '../contexts/AuthContext'
 import { ErrorState } from '../components/shared/ErrorState'
 
 export const Register: React.FC = () => {
   const navigate = useNavigate()
   const { t } = useTranslation()
+  const { login } = useAuth()
   
   const [username, setUsername] = useState('')
   const [email, setEmail] = useState('')
@@ -27,13 +29,22 @@ export const Register: React.FC = () => {
         username,
         email,
         password,
-        role: 'field_official' // The backend forces this anyway to prevent escalation
+        role: 'field_official'
       })
       
       setIsSuccess(true)
-      setTimeout(() => {
-        navigate('/login')
-      }, 2000)
+      // Auto-login new user directly
+      try {
+        const tokens = await authApi.login({ username, password })
+        await login(tokens.access_token, tokens.refresh_token)
+        setTimeout(() => {
+          navigate('/')
+        }, 1200)
+      } catch {
+        setTimeout(() => {
+          navigate('/login')
+        }, 1500)
+      }
     } catch (err: any) {
       setError(err)
       setIsLoading(false)
@@ -44,9 +55,9 @@ export const Register: React.FC = () => {
     return (
       <div className="container mx-auto flex h-[calc(100vh-4rem)] w-screen flex-col items-center justify-center">
         <div className="mx-auto flex w-full flex-col justify-center space-y-6 sm:w-[350px] text-center">
-          <div className="p-6 bg-primary/10 text-primary rounded-lg border border-primary/20">
-            <h2 className="text-xl font-semibold mb-2">Registration Successful</h2>
-            <p className="text-sm opacity-90">Redirecting you to login...</p>
+          <div className="p-6 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 rounded-lg border border-emerald-500/20 shadow-sm">
+            <h2 className="text-xl font-bold mb-2">🎉 Account Created Successfully!</h2>
+            <p className="text-sm opacity-90">Signing you into NER Logistics...</p>
           </div>
         </div>
       </div>
