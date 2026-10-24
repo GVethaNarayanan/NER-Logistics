@@ -450,6 +450,93 @@ def _remove_virtual_nodes(graph: nx.DiGraph):
 
 # ── Route Finding ────────────────────────────────────────────────────────────
 
+def _get_largest_component_nodes(graph: nx.DiGraph) -> set:
+    """Get the set of nodes belonging to the largest weakly connected component."""
+    undirected = graph.to_undirected(as_view=True)
+    components = list(nx.connected_components(undirected))
+    if not components:
+        return set()
+    largest = max(components, key=len)
+    return largest
+
+
+def _snap_to_main_network(
+    graph: nx.DiGraph,
+    lat: float,
+    lon: float,
+    main_nodes: set,
+    max_distance_km: float = 50.0,
+) -> Optional[SnapResult]:
+    """Snap to the nearest edge that belongs to the largest connected component.
+    
+    Only considers edges where BOTH endpoints are in main_nodes.
+    This ensures the snap point is routable to any other point on the main network.
+    """
+    best: Optional[SnapResult] = None
+    
+    for u, v, data in graph.edges(data=True):
+        # Only consider edges on the main connected component
+        if u not in main_nodes or v not in main_nodes:
+            continue
+        
+        u_lat, u_lon = u
+        v_lat, v_lon = v
+        
+        proj_lat, proj_lon, t = _project_point_to_segment(
+            lat, lon, u_lat, u_lon, v_lat, v_lon,
+        )
+        dist = haversine_distance_km(lat, lon, proj_lat, proj_lon)
+        
+        if dist <= max_distance_km and (best is None or dist < best.distance_km):
+            best = SnapResult(
+                edge=(u, v),
+                snapped_lat=proj_lat,
+                snapped_lon=proj_lon,
+                t=t,
+                distance_km=dist,
+                edge_data=data,
+                road_id=data.get("road_id", 0),
+            )
+    
+    return best
+
+
+def _attempt_route(
+    db: Session,
+    graph: nx.DiGraph,
+    origin_snap: SnapResult,
+    dest_snap: SnapResult,
+    preference: str,
+) -> Optional[Dict[str, Any]]:
+    """Attempt to compute a route on the given graph with the given snaps.
+    
+    Returns route_data dict on success, None if no path exists.
+    """
+    with _GRAPH_LOCK:
+        try:
+            _add_virtual_node(graph, _ORIGIN_NODE, origin_snap)
+            _add_virtual_node(graph, _DEST_NODE, dest_snap)
+            
+            if preference == "safest":
+                _apply_risk_scores_to_neighborhood(db, graph, origin_snap, dest_snap)
+                weight_attr = lambda u, v, d: d.get("risk_cost", d.get("distance_km", 0.001))
+            else:
+                weight_attr = "distance_km"
+            
+            try:
+                path = nx.shortest_path(
+                    graph, _ORIGIN_NODE, _DEST_NODE, weight=weight_attr,
+                )
+            except nx.NetworkXNoPath:
+                return None
+            
+            route_data = _extract_route_data(db, graph, path, origin_snap, dest_snap, preference)
+            return route_data
+            
+        finally:
+            _remove_virtual_nodes(graph)
+
+
 def find_route(
     db: Session,
     origin_lat: float,
@@ -463,18 +550,14 @@ def find_route(
     Returns a GeoJSON Feature dict on success.
     Raises RoutingError on failure.
     
-    Strategy:
-    1. Build/retrieve cached graph
-    2. Snap origin and destination to nearest road edges (PostGIS-first)
-    3. Add virtual nodes to the shared graph (with lock)
-    4. Run Dijkstra shortest path
-    5. For 'safest': apply deferred risk scoring to path edges
-    6. Reconstruct route geometry from stored coordinate arrays
-    7. Clean up virtual nodes
+    Three-layer resilience strategy:
+    1. Try corridor bbox routing with connected-component-aware snapping
+    2. If NO_ROUTE: retry with wider corridor (double padding)
+    3. If still NO_ROUTE: retry with full graph (no bbox)
     """
     t_start = time.time()
     
-    # Calculate corridor bounding box around origin and destination (with ~22km margin)
+    # ── Layer 1: Corridor bbox with connected-component snapping ─────────
     pad = 0.40
     min_lat = min(origin_lat, dest_lat) - pad
     max_lat = max(origin_lat, dest_lat) + pad
@@ -491,9 +574,8 @@ def find_route(
         )
     
     # Snap origin and destination
-    t_snap_orig_start = time.time()
+    t_snap_start = time.time()
     origin_snap = snap_to_nearest_edge(graph, origin_lat, origin_lon, db=db)
-    t_snap_orig_end = time.time()
     
     if origin_snap is None:
         raise RoutingError(
@@ -501,9 +583,7 @@ def find_route(
             message="Could not snap origin coordinates to any road segment within the maximum search distance.",
         )
     
-    t_snap_dest_start = time.time()
     dest_snap = snap_to_nearest_edge(graph, dest_lat, dest_lon, db=db)
-    t_snap_dest_end = time.time()
     
     if dest_snap is None:
         raise RoutingError(
@@ -511,53 +591,114 @@ def find_route(
             message="Could not snap destination coordinates to any road segment within the maximum search distance.",
         )
     
-    t_dijkstra_s = 0.0
-    t_reconstruct_s = 0.0
+    # ── Connected-component check: ensure both snaps are on the same network ──
+    origin_edge_node = origin_snap.edge[0]  # a node on the origin's snapped edge
+    dest_edge_node = dest_snap.edge[0]      # a node on the destination's snapped edge
     
-    # Add virtual nodes and route (with cleanup)
-    with _GRAPH_LOCK:
-        try:
-            _add_virtual_node(graph, _ORIGIN_NODE, origin_snap)
-            _add_virtual_node(graph, _DEST_NODE, dest_snap)
+    # Check if they're in the same connected component
+    undirected = graph.to_undirected(as_view=True)
+    if undirected.has_node(origin_edge_node) and undirected.has_node(dest_edge_node):
+        if not nx.has_path(undirected, origin_edge_node, dest_edge_node):
+            # They're on disconnected islands! Re-snap the smaller one to the main network
+            logger.warning("Origin and destination on different connected components — re-snapping to main network")
+            main_nodes = _get_largest_component_nodes(graph)
             
-            # Apply risk scoring to graph edges when safest routing is requested
-            if preference == "safest":
-                _apply_risk_scores_to_neighborhood(db, graph, origin_snap, dest_snap)
-                weight_attr = lambda u, v, d: d.get("risk_cost", d.get("distance_km", 0.001))
-            else:
-                weight_attr = "distance_km"
+            origin_on_main = origin_edge_node in main_nodes
+            dest_on_main = dest_edge_node in main_nodes
             
-            t_dijkstra_start = time.time()
-            try:
-                path = nx.shortest_path(
-                    graph, _ORIGIN_NODE, _DEST_NODE, weight=weight_attr,
-                )
-            except nx.NetworkXNoPath:
-                raise RoutingError(
-                    code="NO_ROUTE",
-                    message="No routable path exists between the specified origin and destination.",
-                )
-            t_dijkstra_end = time.time()
-            t_dijkstra_s = t_dijkstra_end - t_dijkstra_start
+            if not origin_on_main:
+                new_snap = _snap_to_main_network(graph, origin_lat, origin_lon, main_nodes)
+                if new_snap:
+                    logger.info(f"Re-snapped origin from island to main network (dist={new_snap.distance_km:.2f}km)")
+                    origin_snap = new_snap
             
-            # Extract route data before cleanup
-            t_reconstruct_start = time.time()
-            route_data = _extract_route_data(db, graph, path, origin_snap, dest_snap, preference)
-            t_reconstruct_end = time.time()
-            t_reconstruct_s = t_reconstruct_end - t_reconstruct_start
+            if not dest_on_main:
+                new_snap = _snap_to_main_network(graph, dest_lat, dest_lon, main_nodes)
+                if new_snap:
+                    logger.info(f"Re-snapped destination from island to main network (dist={new_snap.distance_km:.2f}km)")
+                    dest_snap = new_snap
+    
+    t_snap_end = time.time()
+    
+    # Try routing
+    route_data = _attempt_route(db, graph, origin_snap, dest_snap, preference)
+    
+    # ── Layer 2: Wider corridor (double padding) ─────────────────────────
+    if route_data is None:
+        logger.warning("Layer 1 failed (corridor bbox) — retrying with wider corridor...")
+        from app.services.graph_service import invalidate_graph_cache
+        invalidate_graph_cache()
+        
+        wide_pad = 0.80
+        wide_bbox = (
+            min(origin_lon, dest_lon) - wide_pad,
+            min(origin_lat, dest_lat) - wide_pad,
+            max(origin_lon, dest_lon) + wide_pad,
+            max(origin_lat, dest_lat) + wide_pad,
+        )
+        graph = build_road_graph(db, bbox=wide_bbox, force_rebuild=True)
+        
+        # Re-snap on the wider graph
+        origin_snap = snap_to_nearest_edge(graph, origin_lat, origin_lon, db=db)
+        dest_snap = snap_to_nearest_edge(graph, dest_lat, dest_lon, db=db)
+        
+        if origin_snap and dest_snap:
+            # Connected-component re-snap on wider graph
+            o_node = origin_snap.edge[0]
+            d_node = dest_snap.edge[0]
+            ug = graph.to_undirected(as_view=True)
+            if ug.has_node(o_node) and ug.has_node(d_node) and not nx.has_path(ug, o_node, d_node):
+                main_nodes = _get_largest_component_nodes(graph)
+                if o_node not in main_nodes:
+                    new_snap = _snap_to_main_network(graph, origin_lat, origin_lon, main_nodes)
+                    if new_snap:
+                        origin_snap = new_snap
+                if d_node not in main_nodes:
+                    new_snap = _snap_to_main_network(graph, dest_lat, dest_lon, main_nodes)
+                    if new_snap:
+                        dest_snap = new_snap
             
-        finally:
-            _remove_virtual_nodes(graph)
-            # Clean up any risk_cost attributes added during safest routing
-            # (they persist on graph edges but will be recomputed next time)
+            route_data = _attempt_route(db, graph, origin_snap, dest_snap, preference)
+    
+    # ── Layer 3: Full graph (no bbox) ────────────────────────────────────
+    if route_data is None:
+        logger.warning("Layer 2 failed (wide corridor) — retrying with full graph (no bbox)...")
+        from app.services.graph_service import invalidate_graph_cache
+        invalidate_graph_cache()
+        
+        graph = build_road_graph(db, bbox=None, force_rebuild=True)
+        
+        origin_snap = snap_to_nearest_edge(graph, origin_lat, origin_lon, db=db)
+        dest_snap = snap_to_nearest_edge(graph, dest_lat, dest_lon, db=db)
+        
+        if origin_snap and dest_snap:
+            # Final connected-component re-snap
+            o_node = origin_snap.edge[0]
+            d_node = dest_snap.edge[0]
+            ug = graph.to_undirected(as_view=True)
+            if ug.has_node(o_node) and ug.has_node(d_node) and not nx.has_path(ug, o_node, d_node):
+                main_nodes = _get_largest_component_nodes(graph)
+                if o_node not in main_nodes:
+                    new_snap = _snap_to_main_network(graph, origin_lat, origin_lon, main_nodes)
+                    if new_snap:
+                        origin_snap = new_snap
+                if d_node not in main_nodes:
+                    new_snap = _snap_to_main_network(graph, dest_lat, dest_lon, main_nodes)
+                    if new_snap:
+                        dest_snap = new_snap
+            
+            route_data = _attempt_route(db, graph, origin_snap, dest_snap, preference)
+    
+    if route_data is None:
+        raise RoutingError(
+            code="NO_ROUTE",
+            message="No routable path exists between the specified origin and destination after all fallback attempts.",
+        )
     
     t_total = time.time() - t_start
     route_data["properties"]["computation_time_ms"] = round(t_total * 1000, 1)
     route_data["properties"]["timings_s"] = {
-        "origin_snap": t_snap_orig_end - t_snap_orig_start,
-        "dest_snap": t_snap_dest_end - t_snap_dest_start,
-        "dijkstra": t_dijkstra_s,
-        "geometry_reconstruct": t_reconstruct_s,
+        "snap": t_snap_end - t_snap_start,
         "total": t_total,
     }
     
