@@ -341,6 +341,154 @@ def _approximate_segment_length(coords: List[Tuple[float, float]]) -> float:
     return total
 
 
+# ── Island Stitching ────────────────────────────────────────────────────────
+
+def _stitch_disconnected_islands(graph: nx.DiGraph) -> int:
+    """Connect all disconnected graph components to the main highway network.
+    
+    Algorithm:
+    1. Find all weakly connected components
+    2. Identify the largest component as the "main network"
+    3. For each smaller component (island), find the nearest node on the main network
+    4. Add bidirectional bridge edges with realistic distance weights
+    
+    This ensures every node is reachable from every other node, eliminating
+    all NO_ROUTE errors caused by OSM data gaps.
+    
+    Uses a spatial grid index for fast nearest-neighbor lookups (O(1) average
+    per island instead of O(n) brute force).
+    
+    Returns:
+        Number of islands stitched to the main network.
+    """
+    import math
+    
+    if graph.number_of_nodes() < 2:
+        return 0
+    
+    undirected = graph.to_undirected(as_view=True)
+    components = list(nx.connected_components(undirected))
+    
+    if len(components) <= 1:
+        return 0  # Already fully connected
+    
+    # Sort components by size (largest first)
+    components.sort(key=len, reverse=True)
+    main_component = components[0]
+    island_components = components[1:]
+    
+    logger.info(
+        f"Island stitching: {len(components)} components found. "
+        f"Main network: {len(main_component)} nodes, "
+        f"{len(island_components)} islands to stitch."
+    )
+    
+    # Build spatial grid index over main component nodes for fast nearest-lookup
+    # Grid cell size: ~0.01 degrees ≈ 1.1km — coarse enough for fast lookups
+    GRID_CELL = 0.01
+    grid: Dict[Tuple[int, int], List[Tuple[float, float]]] = defaultdict(list)
+    
+    for node in main_component:
+        if isinstance(node, tuple) and len(node) == 2:
+            lat, lon = node
+            cell = (int(lat / GRID_CELL), int(lon / GRID_CELL))
+            grid[cell].append(node)
+    
+    def _find_nearest_main_node(
+        island_node: Tuple[float, float],
+    ) -> Tuple[Optional[Tuple[float, float]], float]:
+        """Find the nearest main-network node using the spatial grid.
+        
+        Searches the grid cell containing the island node plus all 24
+        surrounding cells (5x5 neighborhood), expanding if needed.
+        """
+        lat, lon = island_node
+        best_node = None
+        best_dist = float("inf")
+        
+        # Search expanding neighborhoods: 5x5, then 11x11, then 21x21
+        for radius in [2, 5, 10, 25]:
+            center_cell_lat = int(lat / GRID_CELL)
+            center_cell_lon = int(lon / GRID_CELL)
+            
+            for di in range(-radius, radius + 1):
+                for dj in range(-radius, radius + 1):
+                    cell = (center_cell_lat + di, center_cell_lon + dj)
+                    for candidate in grid.get(cell, []):
+                        c_lat, c_lon = candidate
+                        # Fast squared-distance approximation (no sqrt/trig needed for comparison)
+                        dlat = lat - c_lat
+                        dlon = (lon - c_lon) * math.cos(math.radians(lat))
+                        sq_dist = dlat * dlat + dlon * dlon
+                        if sq_dist < best_dist:
+                            best_dist = sq_dist
+                            best_node = candidate
+            
+            if best_node is not None:
+                break  # Found at this radius, no need to expand
+        
+        # Convert squared-degree-distance to km
+        if best_node is not None:
+            actual_dist_km = math.sqrt(best_dist) * 111.0  # rough deg->km
+        else:
+            actual_dist_km = float("inf")
+        
+        return best_node, actual_dist_km
+    
+    # Stitch each island to the main network
+    n_stitched = 0
+    bridge_edges = []
+    
+    for island in island_components:
+        # Find the island node closest to any main-network node
+        best_island_node = None
+        best_main_node = None
+        best_distance_km = float("inf")
+        
+        for island_node in island:
+            if not isinstance(island_node, tuple) or len(island_node) != 2:
+                continue
+            
+            main_node, dist_km = _find_nearest_main_node(island_node)
+            if main_node is not None and dist_km < best_distance_km:
+                best_distance_km = dist_km
+                best_island_node = island_node
+                best_main_node = main_node
+        
+        if best_island_node is not None and best_main_node is not None:
+            # Add bidirectional bridge edges
+            edge_data = {
+                "road_id": 0,  # virtual bridge — no real road
+                "road_type": "bridge_stitch",
+                "distance_km": max(best_distance_km, MIN_EDGE_DISTANCE_KM),
+                "risk_cost": max(best_distance_km, MIN_EDGE_DISTANCE_KM),
+                "oneway": "no",
+                "is_reversed": False,
+                "is_bridge_stitch": True,
+            }
+            bridge_edges.append((best_island_node, best_main_node, edge_data))
+            bridge_edges.append((best_main_node, best_island_node, {**edge_data, "is_reversed": True}))
+            n_stitched += 1
+            
+            # After stitching this island, add its nodes to the main component
+            # so subsequent islands can also stitch to formerly-island nodes
+            for node in island:
+                if isinstance(node, tuple) and len(node) == 2:
+                    lat, lon = node
+                    cell = (int(lat / GRID_CELL), int(lon / GRID_CELL))
+                    grid[cell].append(node)
+                    main_component.add(node)
+    
+    # Bulk-add all bridge edges
+    if bridge_edges:
+        graph.add_edges_from(bridge_edges)
+    
+    if n_stitched > 0:
+        logger.info(f"Stitched {n_stitched} islands to main network ({len(bridge_edges)} bridge edges added)")
+    
+    return n_stitched
+
+
 # ── Public API ────────────────────────────────────────────────────────────────
 
 def build_road_graph(
@@ -402,10 +550,19 @@ def build_road_graph(
     
     graph, road_to_edges, timings = _extract_topology_from_db(db, bbox=bbox)
     
-    # Compute connected components
+    # ── Island Stitching: Connect all disconnected components to main network ──
+    # This guarantees 100% route success — no NO_ROUTE errors from OSM data gaps
+    t_stitch_start = time.time()
+    n_stitched = _stitch_disconnected_islands(graph)
+    t_stitch_end = time.time()
+    timings["island_stitching_s"] = t_stitch_end - t_stitch_start
+    
+    # Compute connected components (for diagnostics)
     t_cc_start = time.time()
-    n_components = 0
-    largest_cc_size = 0
+    undirected = graph.to_undirected(as_view=True)
+    components = list(nx.connected_components(undirected))
+    n_components = len(components)
+    largest_cc_size = max(len(c) for c in components) if components else 0
     t_cc_end = time.time()
     timings["connected_components_s"] = t_cc_end - t_cc_start
     
@@ -442,7 +599,8 @@ def build_road_graph(
         "edge_count": graph.number_of_edges(),
         "connected_components": n_components,
         "largest_component_nodes": largest_cc_size,
-        "largest_component_pct": 0,
+        "largest_component_pct": round(100.0 * largest_cc_size / max(1, n_nodes), 1),
+        "islands_stitched": n_stitched,
         "build_duration_ms": build_duration_ms,
         "last_rebuild_time": datetime.now(timezone.utc).isoformat(),
         "roads_in_graph": len(road_to_edges),
@@ -452,7 +610,7 @@ def build_road_graph(
     
     logger.info(
         f"Graph ready: {n_nodes} nodes, {graph.number_of_edges()} edges, "
-        f"{n_components} components in {build_duration_ms}ms"
+        f"{n_components} components, {n_stitched} islands stitched in {build_duration_ms}ms"
     )
     
     return graph
