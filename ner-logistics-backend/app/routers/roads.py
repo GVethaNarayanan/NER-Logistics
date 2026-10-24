@@ -61,19 +61,32 @@ def get_roads_bbox(
         where_clauses.append("status ILIKE :status")
         params["status"] = f"%{status_filter}%"
 
-    # Show all road types at all zoom levels for complete network visualization
-    # (Previously excluded residential at zoom < 11, but this caused visual gaps)
+    # Progressive road type filtering by zoom level
+    # Shows the connected highway backbone at low zoom, adds detail as user zooms in
+    # This ensures the displayed network always looks clean and connected
+    if zoom < 10:
+        # Show only the main highway backbone — always connected
+        where_clauses.append("road_type IN ('trunk', 'trunk_link', 'primary', 'primary_link', 'secondary', 'secondary_link')")
+    elif zoom < 12:
+        # Add tertiary roads — the district-level connector network
+        where_clauses.append("road_type IN ('trunk', 'trunk_link', 'primary', 'primary_link', 'secondary', 'secondary_link', 'tertiary', 'tertiary_link')")
+    elif zoom < 14:
+        # Add unclassified roads — rural connectors
+        where_clauses.append("road_type NOT IN ('residential', 'service')")
+    # zoom >= 14: show ALL road types including residential
 
     where_sql = " AND ".join(where_clauses)
     
-    # Fast indexed ordering
-    order_sql = "id ASC"
+    # Fast indexed ordering — prioritize major roads first
+    order_sql = "CASE road_type WHEN 'trunk' THEN 1 WHEN 'primary' THEN 2 WHEN 'secondary' THEN 3 WHEN 'tertiary' THEN 4 ELSE 5 END, id ASC"
 
-    # Simplification logic for zoom 8-9
+    # Simplification logic for zoom levels
     if zoom < 8:
         return {"type": "FeatureCollection", "features": [], "total_matched": 0}
     elif zoom < 10:
         geom_sql = "ST_AsGeoJSON(ST_Simplify(geometry, 0.005)) as geojson"
+    elif zoom < 12:
+        geom_sql = "ST_AsGeoJSON(ST_Simplify(geometry, 0.001)) as geojson"
     else:
         geom_sql = "ST_AsGeoJSON(geometry) as geojson"
 

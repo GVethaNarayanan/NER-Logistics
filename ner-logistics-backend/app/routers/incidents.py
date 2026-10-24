@@ -11,6 +11,74 @@ from app.dependencies import require_role
 
 router = APIRouter(prefix="/incidents", tags=["incidents"])
 
+# Incident types that indicate physical road damage
+DAMAGING_INCIDENT_TYPES = {"landslide", "flood", "road_damage", "bridge_collapse", "erosion"}
+
+
+def _auto_update_road_status(db: Session, road_id: int, incident: models.Incident):
+    """Auto-update road status when a damaging incident is reported.
+    
+    Rules:
+    - High severity + damaging type → road status = 'blocked'
+    - Medium severity + damaging type → road status = 'restricted'  
+    - Low severity or non-damaging type → no change
+    """
+    incident_type = (incident.incident_type or "").lower()
+    severity = (incident.severity or "").lower()
+    
+    if incident_type not in DAMAGING_INCIDENT_TYPES:
+        return  # Non-damaging incidents don't affect road status
+    
+    road = db.query(models.Road).filter(models.Road.id == road_id).first()
+    if not road:
+        return
+    
+    if severity == "high":
+        new_status = "blocked"
+    elif severity == "medium":
+        new_status = "restricted"
+    else:
+        return  # Low severity doesn't change road status
+    
+    # Only escalate status, never downgrade (blocked > restricted > open)
+    status_priority = {"open": 0, "restricted": 1, "blocked": 2}
+    current_priority = status_priority.get(road.status, 0)
+    new_priority = status_priority.get(new_status, 0)
+    
+    if new_priority > current_priority:
+        road.status = new_status
+        db.commit()
+        # Invalidate the routing graph cache so new routes avoid this road
+        try:
+            from app.services.graph_service import invalidate_graph_cache
+            invalidate_graph_cache()
+        except Exception:
+            pass
+
+
+def _restore_road_status_if_safe(db: Session, road_id: int):
+    """Restore road status to 'open' if no active damaging incidents remain.
+    
+    Called when an incident is resolved — checks if any other active 
+    (reported/verified) damaging incidents still exist on this road.
+    """
+    active_damage = db.query(models.Incident).filter(
+        models.Incident.road_id == road_id,
+        models.Incident.incident_type.in_(list(DAMAGING_INCIDENT_TYPES)),
+        models.Incident.status.in_(["reported", "verified"]),
+    ).count()
+    
+    if active_damage == 0:
+        road = db.query(models.Road).filter(models.Road.id == road_id).first()
+        if road and road.status != "open":
+            road.status = "open"
+            db.commit()
+            try:
+                from app.services.graph_service import invalidate_graph_cache
+                invalidate_graph_cache()
+            except Exception:
+                pass
+
 @router.get("/", response_model=schemas.PaginatedResponse[schemas.IncidentOut])
 def list_incidents(
     incident_type: str | None = Query(None, description="Filter by incident type"),
@@ -135,6 +203,12 @@ def create_incident(
     db.add(db_incident)
     db.commit()
     db.refresh(db_incident)
+    
+    # ── Auto-update road status based on incident severity ──────────────
+    # Damaging incidents automatically restrict/block the affected road
+    if db_incident.road_id:
+        _auto_update_road_status(db, db_incident.road_id, db_incident)
+    
     return db_incident
 
 
@@ -168,6 +242,16 @@ def update_incident_status(
     db_incident.status = target
     db.commit()
     db.refresh(db_incident)
+    
+    # ── Auto-manage road status on incident lifecycle ──────────────────
+    if db_incident.road_id:
+        if target == "resolved":
+            # Incident resolved — restore road to 'open' if no other active damage
+            _restore_road_status_if_safe(db, db_incident.road_id)
+        elif target == "verified":
+            # Incident verified (confirmed) — ensure road is restricted/blocked
+            _auto_update_road_status(db, db_incident.road_id, db_incident)
+    
     return db_incident
 
 
