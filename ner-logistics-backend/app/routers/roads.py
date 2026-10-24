@@ -42,7 +42,7 @@ def get_roads_bbox(
     zoom: int = Query(10, ge=0, le=20),
     district_id: int | None = Query(None),
     status_filter: str | None = Query(None, alias="status"),
-    limit: int = Query(1000, ge=1, le=2000),
+    limit: int = Query(2000, ge=1, le=5000),
     db: Session = Depends(get_db),
 ):
     """Get roads within a bounding box, returning GeoJSON Features."""
@@ -61,9 +61,8 @@ def get_roads_bbox(
         where_clauses.append("status ILIKE :status")
         params["status"] = f"%{status_filter}%"
 
-    # At zoom < 11, exclude residential roads to keep viewport responses under 200ms
-    if zoom < 11:
-        where_clauses.append("road_type NOT IN ('residential')")
+    # Show all road types at all zoom levels for complete network visualization
+    # (Previously excluded residential at zoom < 11, but this caused visual gaps)
 
     where_sql = " AND ".join(where_clauses)
     

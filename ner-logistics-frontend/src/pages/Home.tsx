@@ -166,7 +166,7 @@ export const Home: React.FC = () => {
         maxLon: ne.lng, maxLat: ne.lat,
         zoom: viewport.zoom,
         districtId: selectedDistrictId,
-        limit: 350
+        limit: 2000
       }).then(result => {
         if (isMounted) {
           setRoadGeoJSON({ type: "FeatureCollection", features: result.features })
