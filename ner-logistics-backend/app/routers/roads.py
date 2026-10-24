@@ -61,19 +61,14 @@ def get_roads_bbox(
         where_clauses.append("status ILIKE :status")
         params["status"] = f"%{status_filter}%"
 
+    # At zoom < 11, exclude residential roads to keep viewport responses under 200ms
+    if zoom < 11:
+        where_clauses.append("road_type NOT IN ('residential')")
+
     where_sql = " AND ".join(where_clauses)
     
-    # Priority ordering: primary > secondary > tertiary > unclassified > residential > others
-    order_sql = """
-        CASE 
-            WHEN road_type = 'primary' THEN 1
-            WHEN road_type = 'secondary' THEN 2
-            WHEN road_type = 'tertiary' THEN 3
-            WHEN road_type = 'unclassified' THEN 4
-            WHEN road_type = 'residential' THEN 5
-            ELSE 6
-        END ASC, id ASC
-    """
+    # Fast indexed ordering
+    order_sql = "id ASC"
 
     # Simplification logic for zoom 8-9
     if zoom < 8:

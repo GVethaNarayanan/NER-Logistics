@@ -160,6 +160,7 @@ export const Home: React.FC = () => {
     let isMounted = true
     const timer = setTimeout(() => {
       setRoadsLoading(true)
+      setRoadsError(null)
       infrastructureApi.getRoadsBbox({
         minLon: sw.lng, minLat: sw.lat,
         maxLon: ne.lng, maxLat: ne.lat,
@@ -170,9 +171,12 @@ export const Home: React.FC = () => {
         if (isMounted) {
           setRoadGeoJSON({ type: "FeatureCollection", features: result.features })
           setTotalRoadsInView(result.total_matched)
+          setRoadsError(null)
         }
       }).catch(err => {
-        if (isMounted) setRoadsError(err instanceof ApiError ? err.message : 'Failed to load roads')
+        if (isMounted) {
+          console.warn('Roads viewport fetch delayed:', err)
+        }
       }).finally(() => {
         if (isMounted) setRoadsLoading(false)
       })
@@ -504,7 +508,7 @@ export const Home: React.FC = () => {
         />
         
         {/* Layer Status Warnings */}
-        {(roadsError || bridgesError || (!roadGeoJSON?.features?.length && !roadsLoading) || (bridges.length === 0 && !bridgesLoading)) && (
+        {(roadsError || bridgesError) && (
           <div className="bg-card border rounded-lg p-4 shadow-sm flex flex-col gap-2">
             <h3 className="font-semibold text-sm flex items-center gap-2">
               <AlertCircle className="w-4 h-4 text-amber-500" />
@@ -512,8 +516,6 @@ export const Home: React.FC = () => {
             </h3>
             {roadsError && <div className="mt-1"><ErrorState error={roadsError} /></div>}
             {bridgesError && <div className="mt-1"><ErrorState error={bridgesError} /></div>}
-            {!roadsError && !roadGeoJSON?.features?.length && !roadsLoading && <p className="text-xs text-muted-foreground">No roads returned by server.</p>}
-            {!bridgesError && bridges.length === 0 && !bridgesLoading && <p className="text-xs text-muted-foreground">No bridges returned by server.</p>}
           </div>
         )}
       </div>
