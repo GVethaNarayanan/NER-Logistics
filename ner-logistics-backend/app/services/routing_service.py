@@ -475,7 +475,7 @@ def find_route(
     t_start = time.time()
     
     # Calculate corridor bounding box around origin and destination (with ~22km margin)
-    pad = 0.20
+    pad = 0.40
     min_lat = min(origin_lat, dest_lat) - pad
     max_lat = max(origin_lat, dest_lat) + pad
     min_lon = min(origin_lon, dest_lon) - pad

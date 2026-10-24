@@ -149,7 +149,6 @@ def _extract_topology_from_db(
                     WHERE r.geometry IS NOT NULL
                       AND r.status = 'open'
                       AND r.is_legacy = false
-                      AND r.road_type NOT IN ('residential')
                       AND ST_Intersects(r.geometry, ST_MakeEnvelope(%s, %s, %s, %s, 4326))
                 """
                 cursor.execute(sql, (bbox[0], bbox[1], bbox[2], bbox[3]))
