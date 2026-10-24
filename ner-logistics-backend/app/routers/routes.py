@@ -1,11 +1,95 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app import models, schemas
 from app.dependencies import require_role
+from app.routers.auth import get_current_user
 from app.services.vehicle_service import haversine_distance_km
 from sqlalchemy import text
 router = APIRouter(prefix="/routes", tags=["routes"])
+
+
+# ── Public READ endpoints (all logged-in users can view saved routes) ────────
+
+@router.get("/")
+def list_routes(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+    db: Session = Depends(get_db),
+):
+    """Public — list all saved routes. Any user can view."""
+    total = db.query(models.Route).count()
+    routes = db.query(models.Route).order_by(models.Route.id.desc()).offset(skip).limit(limit).all()
+    
+    result = []
+    for route in routes:
+        route_roads = db.query(models.RouteRoad).filter(
+            models.RouteRoad.route_id == route.id
+        ).order_by(models.RouteRoad.sequence).all()
+        
+        total_distance = sum(rr.road_length_km or 0 for rr in route_roads)
+        
+        result.append({
+            "id": route.id,
+            "name": route.name,
+            "road_count": len(route_roads),
+            "total_distance_km": round(total_distance, 2),
+            "created_at": route.created_at.isoformat() if hasattr(route, 'created_at') and route.created_at else None,
+        })
+    
+    return {"items": result, "total": total, "skip": skip, "limit": limit}
+
+
+@router.get("/{route_id}")
+def get_route_detail(
+    route_id: int,
+    db: Session = Depends(get_db),
+):
+    """Public — get a single route with all its road segments."""
+    route = db.query(models.Route).filter(models.Route.id == route_id).first()
+    if not route:
+        raise HTTPException(status_code=404, detail="Route not found")
+    
+    route_roads = db.query(models.RouteRoad).filter(
+        models.RouteRoad.route_id == route_id
+    ).order_by(models.RouteRoad.sequence).all()
+    
+    segments = []
+    for rr in route_roads:
+        road = db.query(models.Road).filter(models.Road.id == rr.road_id).first()
+        segments.append({
+            "id": rr.id,
+            "sequence": rr.sequence,
+            "road_id": rr.road_id,
+            "road_name": road.name if road else None,
+            "road_type": road.road_type if road else None,
+            "road_status": road.status if road else None,
+            "road_length_km": rr.road_length_km,
+            "is_reversed": rr.is_reversed,
+        })
+    
+    blocked_roads = [s for s in segments if s.get("road_status") == "blocked"]
+    restricted_roads = [s for s in segments if s.get("road_status") == "restricted"]
+    
+    if blocked_roads:
+        route_status = "blocked"
+    elif restricted_roads:
+        route_status = "restricted"
+    else:
+        route_status = "open"
+    
+    return {
+        "id": route.id,
+        "name": route.name,
+        "route_status": route_status,
+        "blocked_road_count": len(blocked_roads),
+        "restricted_road_count": len(restricted_roads),
+        "segments": segments,
+        "total_distance_km": round(sum(s.get("road_length_km") or 0 for s in segments), 2),
+    }
+
+
+# ── Admin-only WRITE endpoints ──────────────────────────────────────────────
 
 @router.post("/", response_model=schemas.RouteOut, status_code=status.HTTP_201_CREATED)
 def create_route(
@@ -43,7 +127,6 @@ def add_road_to_route(
         .first()
 
     if prev_route_road:
-        # Enforce sequence
         if route_road.sequence <= prev_route_road.sequence:
             raise HTTPException(status_code=400, detail="Sequence must be strictly increasing")
             
@@ -51,10 +134,7 @@ def add_road_to_route(
         if prev_road:
             dist = 999.0
             
-            # Geometry-based distance check (PostGIS)
             if prev_road.geometry is not None and db_road.geometry is not None:
-                # Get the minimum distance between the two geometries
-                # This correctly handles roads that meet at intermediate vertices, not just endpoints
                 try:
                     result = db.execute(text("""
                         SELECT ST_Distance(
@@ -65,12 +145,9 @@ def add_road_to_route(
                     if result is not None:
                         dist = result
                 except Exception:
-                    # Fallback if DB error
                     pass
             
-            # Fallback to endpoint Haversine if geometry distance wasn't calculated (e.g. legacy roads)
             if dist == 999.0:
-                # Legacy check: Distance from prev_road end to new_road start
                 dist = haversine_distance_km(prev_road.end_lat, prev_road.end_lon, db_road.start_lat, db_road.start_lon)
                 
             if dist > 5.0:
@@ -88,3 +165,19 @@ def add_road_to_route(
     db.commit()
     db.refresh(db_route_road)
     return db_route_road
+
+
+@router.delete("/{route_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_route(
+    route_id: int,
+    db: Session = Depends(get_db),
+    _user: models.User = Depends(require_role("admin"))
+):
+    """Admin only - delete a saved route."""
+    route = db.query(models.Route).filter(models.Route.id == route_id).first()
+    if not route:
+        raise HTTPException(status_code=404, detail="Route not found")
+    
+    db.query(models.RouteRoad).filter(models.RouteRoad.route_id == route_id).delete()
+    db.delete(route)
+    db.commit()
